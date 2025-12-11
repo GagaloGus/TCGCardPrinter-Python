@@ -7,7 +7,7 @@ from reportlab.lib.utils import ImageReader
 from PIL import Image
 
 INPUT_DIR = "cartas_imprimir"
-OUTPUT_DIR = "decks"
+OUTPUT_DIR = "pdf"
 BACK_NAME = "back.png"
 PDF_FRONT = ""
 PDF_BACK = ""
@@ -55,9 +55,11 @@ def dibujar_guias_pagina(c: canvas.Canvas,dash: bool = True, lines_between_cards
 
     c.setDash()  # Reset dash a solido
 
-def main(customInputDir = "", customTipoCarta = -1):
+def main(customInputDir = "", customTipoCarta = "-1"):
     global cols, rows, card_w, card_h, card_margin, x_start, y_start, INPUT_DIR
-
+    
+    print(f"\033[33m======= CREAR IMPRIMIBLE DE CARTAS =======\033[0m\n")
+    
     #Se cambia el directorio de input por si se llama desde otro script
     if customInputDir != "":
         INPUT_DIR = customInputDir
@@ -69,9 +71,9 @@ def main(customInputDir = "", customTipoCarta = -1):
     if not images:
         print(f"\033[33mNo se encontraron imágenes en la carpeta '{INPUT_DIR}'\033[0m")
         os.system("pause")
-        exit()
+        sys.exit()
         
-    print(f"\033[0mSe encontraron {len(images)} imágenes para imprimir.")
+    print(f"\033[0mSe encontraron \033[36m{len(images)}\033[0m imágenes para imprimir.")
     
     DECK_DIR = os.path.join(OUTPUT_DIR, input("Quieres poner algun nombre a la carpeta? (Enter para no): "))
 
@@ -86,9 +88,10 @@ def main(customInputDir = "", customTipoCarta = -1):
     pokerDim = (63.5, 88.9)
     tipo_carta = 0
     
-    print(customTipoCarta)
     #Tipo de carta custom por si se llama desde otro script
+    customTipoCarta = int(customTipoCarta)
     if customTipoCarta != -1 and customTipoCarta in [1, 2, 3, 4]:
+        print("")
         tipo_carta = customTipoCarta
     else:
         while True:
@@ -211,4 +214,11 @@ Que dimensiones de carta quieres:
 
 if __name__ == "__main__": 
     os.system("cls")
-    main()
+    
+    # Modifica si se ha llamado desde otro script con otros parametros
+    if len(sys.argv) > 1:
+        main(sys.argv[1], sys.argv[2])
+    else:
+        main()
+    
+    

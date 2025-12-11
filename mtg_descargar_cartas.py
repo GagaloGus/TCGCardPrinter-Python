@@ -1,8 +1,9 @@
+import sys
 import requests
 import re
 import os
-import time
-import imprimir_cartas as modulo_imprimir
+import cloudscraper
+import subprocess
 
 OUTPUT_DIR = ""
 
@@ -32,13 +33,20 @@ class CardClass:
                 index = i
                 filepath = os.path.join(folder_path, f"{self.cardType}_{self.cardID}_{index}.jpg")    
                 open(filepath, "wb").write(img)
-                print(f"✔ Imagen descargada: {filepath}")
+                print(f"[Y] Imagen descargada: {filepath}")
         except Exception as e:
             print(f"[!] Error bajando la imagen de {self.cardName}\n{e}")
     
     def __str__(self):
         return f"{self.cardName} ({self.quantity}) -> {self.scryfall_url}"
-
+    
+def borrar_ultimas_lineas(num_lineas:int):
+    num_lineas+=1
+    # ANSI escape code para mover el cursor hacia arriba
+    sys.stdout.write("\033[F" * num_lineas)  # Mueve el cursor arriba
+    sys.stdout.write("\033[K" * num_lineas)  # Borra las líneas
+    sys.stdout.flush()
+    
 def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
     value = False
     while True:
@@ -47,14 +55,14 @@ def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
             value = __inp == trueOption
             break
         else:
-            modulo_imprimir.borrar_ultimas_lineas(0)
+            borrar_ultimas_lineas(0)
             print(f"[Error: Opción no válida: {__inp}] ", end="")
     return value
 
 # ------------------------------------------------------------
 # Detecta plataforma e ID del mazo
 # ------------------------------------------------------------
-def get_platform_and_id(url):
+def get_platform_and_id(url:str):
     if "archidekt" in url.lower():
         match = re.search(r"decks/(\d+)", url)
         if not match:
@@ -65,18 +73,25 @@ def get_platform_and_id(url):
         deck_id = url.rstrip("/").split("/")[-1]
         return "moxfield", deck_id
 
-    raise ValueError("URL no es Archidekt ni Moxfield.")
-
+    raise ValueError(f"\033[31m[!] Plataforma o web no soportada: \033[0m'{url}'")
 
 # ------------------------------------------------------------
 # Carga las cartas del mazo según la plataforma
 # ------------------------------------------------------------
-def load_deck(platform, deck_id) -> list[CardClass]:
+def load_deck(platform:str, deck_id:str) -> list[CardClass]:
     cards = []
     
+    # -------- ARCHIDEKT --------
     if platform == "archidekt":
         api_url = f"https://archidekt.com/api/decks/{deck_id}/"
-        data = requests.get(api_url).json()
+
+        resp = requests.get(api_url)
+
+        if resp.status_code != 200:
+            print(f"Error: {resp.status_code}")
+            raise ValueError("La API de Archidekt no devolvió JSON válido.")
+        
+        data = resp.json()      
         
         for c in data["cards"]:      
             cardType = c["categories"][0]
@@ -100,60 +115,112 @@ def load_deck(platform, deck_id) -> list[CardClass]:
             else:
                 url = f"https://api.scryfall.com/cards/{editionCode}/{collectorNumber}"
                 
-            cardClass = CardClass(cardName, cardID, cardType, quantity, url)
-            cards.append(cardClass)
+            card = CardClass(cardName, cardID, cardType, quantity, url)
+            cards.append(card)
         
         return cards
 
+    # -------- MOXFIELD --------
     elif platform == "moxfield":
         api_url = f"https://api.moxfield.com/v2/decks/all/{deck_id}"
-        data = requests.get(api_url).json()
-        cards = []
 
-        for section in ["mainboard", "sideboard"]:
-            for name, info in data[section].items():
-                cards.append([name] * info["quantity"])
+        #Crea un scraper de cloudflare
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(api_url)
+
+        if resp.status_code != 200:
+            print(f"Error: {resp.status_code}")
+            raise ValueError("La API de Moxfield no devolvió JSON válido.")
+
+        data = resp.json()
+        
+        #No añade maybeboards, sideboards ni tokens
+        combinedDicts = dict(data["mainboard"]) | dict(data["commanders"]) | dict(data["companions"]) | dict(data["signatureSpells"])
+
+        for key, value in combinedDicts.items():
+            cardName = value["card"]["name"]
+            cardType = value["card"]["type_line"]
+            cardID = value["card"]["uniqueCardId"]
+            boardType = value["boardType"]
+            quantity = value["quantity"]
+            scryfallID = value["card"]["scryfall_id"]
+
+            card = CardClass(cardName, cardID, f"{boardType}_{cardType}", quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
+            cards.append(card)
 
         return cards
 
     else:
-        raise ValueError("Plataforma no soportada.")
+        raise ValueError(f"\033[31m[!] Plataforma no soportada: \033[0m'{platform}'")
 
 # ------------------------------------------------------------
 # Programa principal
 # ------------------------------------------------------------
 def main():
     global OUTPUT_DIR
+    print(f"\033[33m======= DESCARGAR CARTAS MAGIC THE GATHERING =======")
+    print(f"\033[0m- Plataformas admitidas: [ Archidekt, Moxfield ]\n")
     
-    url = input("Pega la URL del mazo (Archidekt o Moxfield): ").strip()
+    url = input("Pega la URL del mazo: ").strip()
+    try:
+        platform, deck_id = get_platform_and_id(url)
+    except Exception as e:
+        print(e)
+        return
+    
+    #Muestra los datos obtenidos
+    borrar_ultimas_lineas(0)
+    print(f"\033[33mPlataforma: \033[0m{platform.capitalize()}")
+    print(f"\033[33mID del mazo: \033[0m'{deck_id}'")
 
-    platform, deck_id = get_platform_and_id(url)
-    print(f"Detecté plataforma: {platform}, ID: {deck_id}")
-
-    print("Cargando cartas del mazo...")
+    #Carga las cartas en una lista
     cards = load_deck(platform, deck_id)
     
     #Como cada carta puede repetirse, esto imprime la longitud apropiada
     amnt = 0
     for c in cards:
         amnt += c.quantity 
-    print(f"Se encontraron {amnt} cartas.")
+    print(f"Se encontraron \033[36m{amnt}\033[0m cartas.")
 
+    #Crea una carpeta donde se descargaran las cartas
     OUTPUT_DIR = os.path.join("cartas", input("Quieres poner algun nombre a la carpeta de descarga? (Enter para no): "))
     os.makedirs(OUTPUT_DIR,exist_ok=True)
+    print("")
     
+    #Descarga las cartas una por una
     for c in cards:
         c.downloadImages(OUTPUT_DIR)
 
-    print(f"\nListo, mi rey. Todas las cartas estan en la carpeta '{OUTPUT_DIR}'")
+    print(f"\n\033[32mListo, mi rey. Todas las cartas estan en la carpeta '{OUTPUT_DIR}'\033[0m")
     
-    # Configuracion de impresion
-    imprimir_ahora = yesNo_CustomChoice("¿Quieres crear el PDF de las cartas?", "si", "no")
-
-    if(imprimir_ahora):
-        modulo_imprimir.main(OUTPUT_DIR, 1)
+    #Permite directamente crear el imprimible de las imagenes
+    try:
+        import imprimir_cartas as modulo_imprimir
+        imprimir_ahora = yesNo_CustomChoice("¿Quieres crear el PDF de las cartas?", "si", "no")
+        
+        if(imprimir_ahora):
+            borrar_ultimas_lineas(0)
+            print()
+            modulo_imprimir.main(OUTPUT_DIR, "1")
+            sys.exit()
+    except:
+        print("\033[33m[!] El modulo de impresion no esta disponible desde este script.\033[0m")
+        
+    #try:
+    #    borrar_ultimas_lineas(0)
+    #    print()
+    #    
+    #    imprimir_exe = os.path.join(os.path.dirname(__file__), "imprimir_cartas.exe")
+    #    subprocess.run([imprimir_exe, OUTPUT_DIR, "1"])
+    #    sys.exit()
+    #except:
+    #    print("\033[33m[!] El Ejecutable de impresion no esta disponible desde este script.\033[0m")
 
 if __name__ == "__main__":
     os.system("cls")
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(e)
 
+os.system("pause")

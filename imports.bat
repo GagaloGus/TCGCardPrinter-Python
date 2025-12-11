@@ -3,7 +3,8 @@ echo Actualizando python
 echo.
 cls
 python.exe -m pip install --upgrade pip
-echo Importando paquetes de python
+cls
+echo --------- Importando paquetes de python ---------
 echo.
 pip install bs4
 echo.
@@ -14,6 +15,8 @@ echo.
 pip install reportlab
 echo.
 pip install pyinstaller
+echo.
+pip install cloudscraper
 echo.
 echo Fin
 pause
