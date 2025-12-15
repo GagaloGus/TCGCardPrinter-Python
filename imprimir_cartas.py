@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
@@ -27,6 +28,23 @@ def borrar_ultimas_lineas(num_lineas):
     sys.stdout.write("\033[F" * num_lineas)  # Mueve el cursor arriba
     sys.stdout.write("\033[K" * num_lineas)  # Borra las líneas
     sys.stdout.flush()
+
+def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
+    value = False
+    while True:
+        __inp = input(f"{text} [{trueOption}/{falseOption}]: ").lower()
+        if __inp in [trueOption, falseOption]:
+            value = __inp == trueOption
+            break
+        else:
+            borrar_ultimas_lineas(0)
+            print(f"\033[31m[Error: Opción no válida: {__inp}]\033[0m ", end="")
+    return value
+
+def crear_directorio_nuevo(name: str) -> str:
+    # Reemplaza caracteres no admitidos
+    name = re.sub(r'[\\/:*?"<>|]', '_', name).strip()
+    return name
 
 def dibujar_guias_pagina(c: canvas.Canvas,dash: bool = True, lines_between_cards:bool = True):
     global cols, rows, card_w, card_h, card_margin, x_start, y_start
@@ -75,7 +93,7 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         
     print(f"\033[0mSe encontraron \033[36m{len(images)}\033[0m imágenes para imprimir.")
     
-    DECK_DIR = os.path.join(OUTPUT_DIR, input("Quieres poner algun nombre a la carpeta? (Enter para no): "))
+    DECK_DIR = crear_directorio_nuevo(os.path.join(OUTPUT_DIR, input("Quieres poner algun nombre a la carpeta? (Enter para no): ")))
 
     PDF_FRONT = os.path.join(DECK_DIR, "deck_front.pdf")
     PDF_BACK = os.path.join(DECK_DIR, "deck_back.pdf")
@@ -88,6 +106,7 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     pokerDim = (63.5, 88.9)
     tipo_carta = 0
     
+    print("")
     #Tipo de carta custom por si se llama desde otro script
     customTipoCarta = int(customTipoCarta)
     if customTipoCarta != -1 and customTipoCarta in [1, 2, 3, 4]:
@@ -95,20 +114,19 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         tipo_carta = customTipoCarta
     else:
         while True:
-            __inp = input(f"""
-Que dimensiones de carta quieres:
-    1-> Magic The Gathering ({magicDim[0]}mm x {magicDim[1]}mm)
-    2-> Yugioh ({yugiDim[0]}mm x {yugiDim[1]}mm)
-    3-> Carta normal ({pokerDim[0]}mm x {pokerDim[1]}mm)
-    4-> Otro\n""")
+            __inp = input(f"""Que dimensiones de carta quieres:
+  1-> Magic The Gathering ({magicDim[0]}mm x {magicDim[1]}mm)
+  2-> Yugioh ({yugiDim[0]}mm x {yugiDim[1]}mm)
+  3-> Carta normal ({pokerDim[0]}mm x {pokerDim[1]}mm)
+  4-> Otro\n""")
             tipo_carta = int(__inp) if __inp.isdigit() else 0
 
             # Verificacion
             if tipo_carta in [1, 2, 3, 4]:
                 break
             else:
-                borrar_ultimas_lineas(4) 
-                print(f"[Error: Opción no válida: {tipo_carta}] ", end="")
+                borrar_ultimas_lineas(5) 
+                print(f"\033[33m[Error: Opción no válida: {tipo_carta}] \033[0m", end="")
 
             
     # Mostrar las dimensiones seleccionadas
@@ -132,22 +150,7 @@ Que dimensiones de carta quieres:
     print("\033[0m")
     
     # Configuracion del margen
-    card_margin = 0
-    while True:
-        __inp = input("¿Quieres que haya margen entre las cartas? [si/no]: ").lower()
-        if __inp in ["si", "no"]:
-            borrar_ultimas_lineas(0)
-            if __inp == "no":
-                card_margin = 0
-                print(f"\033[33m-- Sin margen --")
-            else:
-                card_margin = 5*mm
-                print(f"\033[33m-- Con margen (5mm) --")
-            break
-        else:
-            borrar_ultimas_lineas(0)
-            print(f"[Error: Opción no válida: {__inp}] ", end="")
-       
+    card_margin = 5*mm if yesNo_CustomChoice("¿Quieres que haya margen entre las cartas?", "si", "no") else 0       
     
     # Calcula cuantas cartas caben en horizontal y vertical
     cols = int(page_width // (card_w + card_margin))

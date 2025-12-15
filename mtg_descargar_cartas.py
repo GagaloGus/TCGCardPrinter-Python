@@ -6,6 +6,7 @@ import cloudscraper
 import subprocess
 
 OUTPUT_DIR = ""
+ERROR_DOWNLOADS = 0
 
 class CardClass:
     def __init__(self, cardName:str, cardID:int, cardType:str, quantity:int, scryfall_url:str):
@@ -16,6 +17,7 @@ class CardClass:
         self.scryfall_url = scryfall_url
         
     def downloadImages(self, folder_path:str):
+        global ERROR_DOWNLOADS
         try:
             #Pide el JSON de scryfall
             data = requests.get(self.scryfall_url).json()
@@ -26,19 +28,25 @@ class CardClass:
             elif "card_faces" in data:
                 img_url = data["card_faces"][0]["image_uris"]["border_crop"]
             else:
-                print(f"[!] No hay imagen para {self.scryfall_url}")     
+                raise ValueError(f"\033[31m[!]\033[0m No hay imagen para {self.cardName} / {self.scryfall_url}")            
             
             img = requests.get(img_url).content
             for i in range(self.quantity):
                 index = i
-                filepath = os.path.join(folder_path, f"{self.cardType}_{self.cardID}_{index}.jpg")    
+                filepath = os.path.join(folder_path, crear_directorio_nuevo(f"{self.cardType}_{self.cardID}_{index}.jpg"))    
                 open(filepath, "wb").write(img)
-                print(f"[Y] Imagen descargada: {filepath}")
+                print(f"\033[32m[Y]\033[0m Imagen descargada: {filepath}")
         except Exception as e:
-            print(f"[!] Error bajando la imagen de {self.cardName}\n{e}")
+            print(f"\033[31m[!]\033[0m Error bajando la imagen de {self.cardName}\n{e}")
+            ERROR_DOWNLOADS += 1
     
     def __str__(self):
         return f"{self.cardName} ({self.quantity}) -> {self.scryfall_url}"
+ 
+def crear_directorio_nuevo(name: str) -> str:
+    # Reemplaza caracteres no admitidos
+    name = re.sub(r'[\\/:*?"<>|]', '_', name).strip()
+    return name
     
 def borrar_ultimas_lineas(num_lineas:int):
     num_lineas+=1
@@ -56,8 +64,34 @@ def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
             break
         else:
             borrar_ultimas_lineas(0)
-            print(f"[Error: Opción no válida: {__inp}] ", end="")
+            print(f"\033[31m[Error: Opción no válida: {__inp}]\033[0m ", end="")
     return value
+
+def getJson_api_data(platform:str, deck_id:str):
+    if platform == "archidekt":
+        api_url = f"https://archidekt.com/api/decks/{deck_id}/"
+
+        resp = requests.get(api_url)
+
+        if resp.status_code != 200:
+            print(f"Error: {resp.status_code}")
+            raise ValueError("\033[31m[!] La API de Archidekt no devolvió JSON válido.")
+        
+        return resp.json()     
+    elif platform == "moxfield":
+        api_url = f"https://api.moxfield.com/v2/decks/all/{deck_id}"
+
+        #Crea un scraper de cloudflare
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(api_url)
+
+        if resp.status_code != 200:
+            print(f"Error: {resp.status_code}")
+            raise ValueError("\033[31m[!] La API de Moxfield no devolvió JSON válido.")
+
+        return resp.json()
+    else:
+        raise ValueError(f"\033[31m[!] Plataforma no soportada: \033[0m'{platform}'")
 
 # ------------------------------------------------------------
 # Detecta plataforma e ID del mazo
@@ -83,15 +117,7 @@ def load_deck(platform:str, deck_id:str) -> list[CardClass]:
     
     # -------- ARCHIDEKT --------
     if platform == "archidekt":
-        api_url = f"https://archidekt.com/api/decks/{deck_id}/"
-
-        resp = requests.get(api_url)
-
-        if resp.status_code != 200:
-            print(f"Error: {resp.status_code}")
-            raise ValueError("La API de Archidekt no devolvió JSON válido.")
-        
-        data = resp.json()      
+        data = getJson_api_data(platform, deck_id)     
         
         for c in data["cards"]:      
             cardType = c["categories"][0]
@@ -122,17 +148,7 @@ def load_deck(platform:str, deck_id:str) -> list[CardClass]:
 
     # -------- MOXFIELD --------
     elif platform == "moxfield":
-        api_url = f"https://api.moxfield.com/v2/decks/all/{deck_id}"
-
-        #Crea un scraper de cloudflare
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.get(api_url)
-
-        if resp.status_code != 200:
-            print(f"Error: {resp.status_code}")
-            raise ValueError("La API de Moxfield no devolvió JSON válido.")
-
-        data = resp.json()
+        data = getJson_api_data(platform, deck_id)
         
         #No añade maybeboards, sideboards ni tokens
         combinedDicts = dict(data["mainboard"]) | dict(data["commanders"]) | dict(data["companions"]) | dict(data["signatureSpells"])
@@ -157,19 +173,23 @@ def load_deck(platform:str, deck_id:str) -> list[CardClass]:
 # Programa principal
 # ------------------------------------------------------------
 def main():
-    global OUTPUT_DIR
+    global OUTPUT_DIR, ERROR_DOWNLOADS
+    ERROR_DOWNLOADS = 0
+    
     print(f"\033[33m======= DESCARGAR CARTAS MAGIC THE GATHERING =======")
     print(f"\033[0m- Plataformas admitidas: [ Archidekt, Moxfield ]\n")
     
     url = input("Pega la URL del mazo: ").strip()
     try:
         platform, deck_id = get_platform_and_id(url)
+        deckName = getJson_api_data(platform, deck_id)["name"]
     except Exception as e:
         print(e)
         return
     
     #Muestra los datos obtenidos
     borrar_ultimas_lineas(0)
+    print(f"\033[33m-- {deckName} --")
     print(f"\033[33mPlataforma: \033[0m{platform.capitalize()}")
     print(f"\033[33mID del mazo: \033[0m'{deck_id}'")
 
@@ -183,7 +203,8 @@ def main():
     print(f"Se encontraron \033[36m{amnt}\033[0m cartas.")
 
     #Crea una carpeta donde se descargaran las cartas
-    OUTPUT_DIR = os.path.join("cartas", input("Quieres poner algun nombre a la carpeta de descarga? (Enter para no): "))
+    customFolderName = crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta de descarga? (Enter para no): "))
+    OUTPUT_DIR = os.path.join("cartas", customFolderName if customFolderName != "" else crear_directorio_nuevo(deckName))
     os.makedirs(OUTPUT_DIR,exist_ok=True)
     print("")
     
@@ -192,6 +213,8 @@ def main():
         c.downloadImages(OUTPUT_DIR)
 
     print(f"\n\033[32mListo, mi rey. Todas las cartas estan en la carpeta '{OUTPUT_DIR}'\033[0m")
+    if(ERROR_DOWNLOADS > 0):
+        print(f"\033[33m[!] No se pudieron descargar {ERROR_DOWNLOADS} cartas, te toca descargalas manualmente :(\033[0m")
     
     #Permite directamente crear el imprimible de las imagenes
     try:
@@ -206,16 +229,6 @@ def main():
     except:
         print("\033[33m[!] El modulo de impresion no esta disponible desde este script.\033[0m")
         
-    #try:
-    #    borrar_ultimas_lineas(0)
-    #    print()
-    #    
-    #    imprimir_exe = os.path.join(os.path.dirname(__file__), "imprimir_cartas.exe")
-    #    subprocess.run([imprimir_exe, OUTPUT_DIR, "1"])
-    #    sys.exit()
-    #except:
-    #    print("\033[33m[!] El Ejecutable de impresion no esta disponible desde este script.\033[0m")
-
 if __name__ == "__main__":
     os.system("cls")
     try:

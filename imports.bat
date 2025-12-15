@@ -14,7 +14,7 @@ pip install pillow
 echo.
 pip install reportlab
 echo.
-pip install pyinstaller
+pip install auto-py-to-exe
 echo.
 pip install cloudscraper
 echo.
