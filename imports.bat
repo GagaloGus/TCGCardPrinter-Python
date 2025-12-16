@@ -18,5 +18,7 @@ pip install auto-py-to-exe
 echo.
 pip install cloudscraper
 echo.
+pip install pikepdf
+echo.
 echo Fin
 pause

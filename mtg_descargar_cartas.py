@@ -3,7 +3,6 @@ import requests
 import re
 import os
 import cloudscraper
-import subprocess
 
 OUTPUT_DIR = ""
 ERROR_DOWNLOADS = 0
@@ -58,11 +57,12 @@ def borrar_ultimas_lineas(num_lineas:int):
 def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
     value = False
     while True:
-        __inp = input(f"{text} [{trueOption}/{falseOption}]: ").lower()
+        __inp = input(f"{text} [{trueOption}/{falseOption}]: \033[36m").lower()
         if __inp in [trueOption, falseOption]:
             value = __inp == trueOption
             break
         else:
+            print("\033[0m", end="")
             borrar_ultimas_lineas(0)
             print(f"\033[31m[Error: Opción no válida: {__inp}]\033[0m ", end="")
     return value
@@ -112,25 +112,32 @@ def get_platform_and_id(url:str):
 # ------------------------------------------------------------
 # Carga las cartas del mazo según la plataforma
 # ------------------------------------------------------------
-def load_deck(platform:str, deck_id:str) -> list[CardClass]:
+def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
     cards = []
     
     # -------- ARCHIDEKT --------
     if platform == "archidekt":
         data = getJson_api_data(platform, deck_id)     
         
+        #Skip a la maybe board y los tokens           
+        skipTypes = ["Maybeboard"]
+        if not prnt_tokens:
+            skipTypes.append("Tokens & Extras")
+        
         for c in data["cards"]:      
             cardType = c["categories"][0]
-            #Skip a la maybe board y los tokens
-            if cardType in ["Maybeboard", "Tokens & Extras"]:
+            
+            if cardType in skipTypes:
                 continue
             
             cardID = c["card"]["id"]
-            quantity = c["quantity"]
             multiverseID = c["card"]["multiverseid"]
             editionCode = c["card"]["edition"]["editioncode"]
             collectorNumber = c["card"]["collectorNumber"]
             cardName = c["card"]["oracleCard"]["name"]
+            
+            #Si es un token, que solo imprima 1
+            quantity = c["quantity"] if cardType != "Tokens & Extras" else 1
             
             url = ""                
             #https://api.scryfall.com/cards/multiverse/<multiverseID>
@@ -150,20 +157,42 @@ def load_deck(platform:str, deck_id:str) -> list[CardClass]:
     elif platform == "moxfield":
         data = getJson_api_data(platform, deck_id)
         
-        #No añade maybeboards, sideboards ni tokens
-        combinedDicts = dict(data["mainboard"]) | dict(data["commanders"]) | dict(data["companions"]) | dict(data["signatureSpells"])
+        all_cards = {}
+        i = 0
+        
+        #principales
+        for sec in ["mainboard", "commanders", "companions", "signatureSpells"]:
+            if sec in data:
+                for key, c in data[sec].items():
+                    all_cards[i] = c
+                    i += 1
 
-        for key, value in combinedDicts.items():
-            cardName = value["card"]["name"]
-            cardType = value["card"]["type_line"]
-            cardID = value["card"]["uniqueCardId"]
-            boardType = value["boardType"]
-            quantity = value["quantity"]
-            scryfallID = value["card"]["scryfall_id"]
+        # tokens
+        if prnt_tokens and "tokens" in data:
+            for t in data["tokens"]:
+                if t.get("layout") == "token":
+                    all_cards[i] = t
+                    i+=1
 
-            card = CardClass(cardName, cardID, f"{boardType}_{cardType}", quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
+          
+        for id, value in all_cards.items():
+             
+            #Si tienen la lista "card" se usa esa, si no la lista normal
+            if "card" in value:
+                card_data = value["card"]
+            else:
+                card_data = value
+            
+            cardName = card_data["name"] if "name" in card_data else "noName"
+            cardID = card_data["uniqueCardId"] if "uniqueCardId" in card_data else 0
+            scryfallID = card_data["scryfall_id"] 
+            
+            cardType = card_data["type_line"] if "type_line" in card_data else "noType"
+            quantity = value["quantity"] if "quantity" in value else 1
+
+            card = CardClass(cardName, cardID, cardType, quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
             cards.append(card)
-
+        
         return cards
 
     else:
@@ -179,7 +208,7 @@ def main():
     print(f"\033[33m======= DESCARGAR CARTAS MAGIC THE GATHERING =======")
     print(f"\033[0m- Plataformas admitidas: [ Archidekt, Moxfield ]\n")
     
-    url = input("Pega la URL del mazo: ").strip()
+    url = input("Pega la URL del mazo: \033[36m").strip()
     try:
         platform, deck_id = get_platform_and_id(url)
         deckName = getJson_api_data(platform, deck_id)["name"]
@@ -192,9 +221,14 @@ def main():
     print(f"\033[33m-- {deckName} --")
     print(f"\033[33mPlataforma: \033[0m{platform.capitalize()}")
     print(f"\033[33mID del mazo: \033[0m'{deck_id}'")
-
+    
+    #Pregunta para imprimir los tokens
+    prnt_tokens = yesNo_CustomChoice("¿Quieres imprimir tambien los tokens?", "si", "no")
+    borrar_ultimas_lineas(0)
+    print(f"\033[33mImprimir tokens: \033[0m'{"Si" if prnt_tokens else "No"}'\n")
+    
     #Carga las cartas en una lista
-    cards = load_deck(platform, deck_id)
+    cards = load_deck(platform, deck_id, prnt_tokens)
     
     #Como cada carta puede repetirse, esto imprime la longitud apropiada
     amnt = 0
@@ -225,7 +259,7 @@ def main():
             borrar_ultimas_lineas(0)
             print()
             modulo_imprimir.main(OUTPUT_DIR, "1")
-            sys.exit()
+            os._exit(0)
     except:
         print("\033[33m[!] El modulo de impresion no esta disponible desde este script.\033[0m")
         
