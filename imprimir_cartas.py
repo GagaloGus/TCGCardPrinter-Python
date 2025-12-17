@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import pikepdf
+import subprocess
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
@@ -181,9 +182,9 @@ Que dimensiones de carta quieres:
     # Configuracion del margen
     has_margin = yesNo_CustomChoice("¿Quieres que haya margen entre las cartas?", "si", "no")
     borrar_ultimas_lineas(0)
-    print(f"\033[33m-- {"Con" if has_margin else "Sin"} Margen --\033[0m")
+    print(f"\033[33m-- {'Con' if has_margin else 'Sin'} Margen --\033[0m")
     
-    card_margin = 5*mm if has_margin else 0       
+    card_margin = 5*mm if has_margin else 0.3*mm       
     
     # Calcula cuantas cartas caben en horizontal y vertical
     cols = int(page_width // (card_w + card_margin))
@@ -205,7 +206,8 @@ Que dimensiones de carta quieres:
     dibujar_guias_pagina(c)
 
     print("\n\033[36mGenerando PDF", end="")
-    for img_name in images:
+    for i in range(len(images)):
+        img_name = images[i]
         # Se salta la imagen del dorso para evitar impresion innecesaria
         if(img_name == BACK_NAME):
             continue
@@ -220,7 +222,7 @@ Que dimensiones de carta quieres:
         if count % cols == 0:
             x = x_start
             y -= card_h + card_margin
-        if count % (cols*rows) == 0: # nueva pagina
+        if count % (cols*rows) == 0 and i < len(images) - 1: # nueva pagina
             c.showPage()
             dibujar_guias_pagina(c)
             x, y = x_start, y_start
@@ -250,7 +252,10 @@ Que dimensiones de carta quieres:
         print(f"\033[32mPDF de dorsos generado: \033[0m{PDF_BACK}")
     else:
         print(f"\033[33mNo encontré '{BACK_IMAGE}'\033[0m")
+        
+    subprocess.Popen(rf'explorer /select,"{PDF_FRONT}"')
     os.system("pause")
+    os._exit(0)
 
 if __name__ == "__main__": 
     os.system("cls")

@@ -3,6 +3,7 @@ import requests
 import re
 import os
 import cloudscraper
+import subprocess
 
 OUTPUT_DIR = ""
 ERROR_DOWNLOADS = 0
@@ -225,7 +226,7 @@ def main():
     #Pregunta para imprimir los tokens
     prnt_tokens = yesNo_CustomChoice("¿Quieres imprimir tambien los tokens?", "si", "no")
     borrar_ultimas_lineas(0)
-    print(f"\033[33mImprimir tokens: \033[0m'{"Si" if prnt_tokens else "No"}'\n")
+    print(f"\033[33mImprimir tokens: \033[0m'{'Si' if prnt_tokens else 'No'}'\n")
     
     #Carga las cartas en una lista
     cards = load_deck(platform, deck_id, prnt_tokens)
@@ -260,8 +261,13 @@ def main():
             print()
             modulo_imprimir.main(OUTPUT_DIR, "1")
             os._exit(0)
+        else:
+            subprocess.Popen(rf'explorer /select,"{OUTPUT_DIR}"')
+            os.system("pause")
     except:
         print("\033[33m[!] El modulo de impresion no esta disponible desde este script.\033[0m")
+        subprocess.Popen(rf'explorer /select,"{OUTPUT_DIR}"')
+        os.system("pause")
         
 if __name__ == "__main__":
     os.system("cls")
@@ -270,4 +276,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(e)
 
-os.system("pause")

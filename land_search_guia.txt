@@ -1,0 +1,13 @@
+pide set y ID
+
+hace un request de estos
+- si su nombre no esta incluido en LAND_TYPES, que vuelva a pedir nuevos set y ID
+- si su nombre esta incluido en LAND_TYPES
+
+itera el ID hacia abajo y hacia arriba hasta que el nombre no este incluido en LAND_TYPES
+id= 268 -> 269, 270, ERROR // 267, 266, 265, ERROR
+guarda cada url en un array URLS = []
+
+itera y abre en el navegador cada url
+
+- fin -
