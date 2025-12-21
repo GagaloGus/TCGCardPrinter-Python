@@ -6,42 +6,49 @@ import cloudscraper
 import subprocess
 
 OUTPUT_DIR = ""
-ERROR_DOWNLOADS = 0
+N_ERROR_DOWNLOADS = 0
+NAMES_ERROR_DOWNLOADS = [str]
 
 class CardClass:
-    def __init__(self, cardName:str, cardID:int, cardType:str, quantity:int, scryfall_url:str):
-        self.cardName = cardName
+    def __init__(self, cardID:int, quantity:int, scryfall_url:str):    
+        #Pide el JSON de scryfall al crear la carta
+        self.jsonData = requests.get(scryfall_url).json()
+        
+        self.cardMainName = self.jsonData["name"]
+        self.cardNames = list[str](self.cardMainName.replace(" ", "").split("//"))
+        self.cardTypes = list[str](self.jsonData["type_line"].replace(" ", "").lower().split("//"))
         self.cardID = str(cardID)
-        self.cardType = cardType.lower().replace(" ","")
         self.quantity = quantity
         self.scryfall_url = scryfall_url
+        print(f"\033[33m[+]\033[0m Datos de carta cargados de -> {self.cardMainName}")
         
     def downloadImages(self, folder_path:str):
-        global ERROR_DOWNLOADS
-        try:
-            #Pide el JSON de scryfall
-            data = requests.get(self.scryfall_url).json()
+        global N_ERROR_DOWNLOADS, NAMES_ERROR_DOWNLOADS
+        try:   
+            img_urls = []
             
-            img_url = ""
-            if "image_uris" in data:
-                img_url = data["image_uris"]["border_crop"]
-            elif "card_faces" in data:
-                img_url = data["card_faces"][0]["image_uris"]["border_crop"]
+            if "image_uris" in self.jsonData:
+                img_urls.append(self.jsonData["image_uris"]["border_crop"])
+            elif "card_faces" in self.jsonData:
+                for card_face in self.jsonData["card_faces"]:
+                    img_urls.append(card_face["image_uris"]["border_crop"])
             else:
-                raise ValueError(f"\033[31m[!]\033[0m No hay imagen para {self.cardName} / {self.scryfall_url}")            
+                raise ValueError(f"\033[31m[!]\033[0m No hay imagen para {self.cardMainName} / {self.scryfall_url}")            
             
-            img = requests.get(img_url).content
-            for i in range(self.quantity):
-                index = i
-                filepath = os.path.join(folder_path, crear_directorio_nuevo(f"{self.cardType}_{self.cardID}_{index}.jpg"))    
-                open(filepath, "wb").write(img)
-                print(f"\033[32m[Y]\033[0m Imagen descargada: {filepath}")
+            for i, url in enumerate(img_urls):
+                img = requests.get(url).content
+                for q in range(self.quantity):
+                    filepath = os.path.join(folder_path, crear_directorio_nuevo(f"{self.cardTypes[i]}_{self.cardID}_{q}.jpg"))    
+                    open(filepath, "wb").write(img)
+                    print(f"\033[32m[Y]\033[0m Imagen descargada: {filepath}")
+                    
         except Exception as e:
-            print(f"\033[31m[!]\033[0m Error bajando la imagen de {self.cardName}\n{e}")
-            ERROR_DOWNLOADS += 1
+            print(f"\033[31m[!]\033[0m Error bajando la imagen de {self.cardMainName}\n{e}")
+            N_ERROR_DOWNLOADS += 1
+            NAMES_ERROR_DOWNLOADS.append(self.cardMainName)
     
     def __str__(self):
-        return f"{self.cardName} ({self.quantity}) -> {self.scryfall_url}"
+        return f"{self.cardMainName} ({self.quantity}) -> {self.scryfall_url}"
  
 def crear_directorio_nuevo(name: str) -> str:
     # Reemplaza caracteres no admitidos
@@ -135,7 +142,6 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
             multiverseID = c["card"]["multiverseid"]
             editionCode = c["card"]["edition"]["editioncode"]
             collectorNumber = c["card"]["collectorNumber"]
-            cardName = c["card"]["oracleCard"]["name"]
             
             #Si es un token, que solo imprima 1
             quantity = c["quantity"] if cardType != "Tokens & Extras" else 1
@@ -149,7 +155,7 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
             else:
                 url = f"https://api.scryfall.com/cards/{editionCode}/{collectorNumber}"
                 
-            card = CardClass(cardName, cardID, cardType, quantity, url)
+            card = CardClass(cardID, quantity, url)
             cards.append(card)
         
         return cards
@@ -184,14 +190,12 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
             else:
                 card_data = value
             
-            cardName = card_data["name"] if "name" in card_data else "noName"
             cardID = card_data["uniqueCardId"] if "uniqueCardId" in card_data else 0
             scryfallID = card_data["scryfall_id"] 
             
-            cardType = card_data["type_line"] if "type_line" in card_data else "noType"
             quantity = value["quantity"] if "quantity" in value else 1
 
-            card = CardClass(cardName, cardID, cardType, quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
+            card = CardClass(cardID, quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
             cards.append(card)
         
         return cards
@@ -235,7 +239,7 @@ def main():
     amnt = 0
     for c in cards:
         amnt += c.quantity 
-    print(f"Se encontraron \033[36m{amnt}\033[0m cartas.")
+    print(f"\nSe encontraron \033[36m{amnt}\033[0m cartas.")
 
     #Crea una carpeta donde se descargaran las cartas
     customFolderName = crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta de descarga? (Enter para no): "))
@@ -271,8 +275,6 @@ def main():
         
 if __name__ == "__main__":
     os.system("cls")
-    try:
-        main()
-    except Exception as e:
-        print(e)
+    main()
+
 

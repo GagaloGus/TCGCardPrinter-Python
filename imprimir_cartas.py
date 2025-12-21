@@ -9,6 +9,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from PIL import Image
 
+EXTENSIONS_ALLOWED = [".png", ".jpg", ".jpeg", ".jfif", ".tiff", ".webp"]
 INPUT_DIR = "cartas_imprimir"
 OUTPUT_DIR = "pdf"
 BACK_NAME = "back.png"
@@ -106,7 +107,8 @@ def comprimir_pdf(input_pdf: str, output_pdf: str):
 def main(customInputDir = "", customTipoCarta = "-1"):
     global cols, rows, card_w, card_h, card_margin, x_start, y_start, INPUT_DIR
     
-    print(f"\033[33m======= CREAR IMPRIMIBLE DE CARTAS =======\033[0m\n")
+    print(f"\033[33m==================== CREAR IMPRIMIBLE DE CARTAS ====================")
+    print(f"Extensiones de imagen admitidas: \033[0m{EXTENSIONS_ALLOWED}\n")
     
     #Se cambia el directorio de input por si se llama desde otro script
     if customInputDir != "":
@@ -115,7 +117,12 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     os.makedirs(INPUT_DIR, exist_ok=True)
 
     # Buscar imágenes
-    images = sorted([f for f in os.listdir(INPUT_DIR)])
+    images = []
+    for f in sorted(os.listdir(INPUT_DIR)):
+        for ext in EXTENSIONS_ALLOWED:
+            if ext in f:
+                images.append(f)
+                  
     if not images:
         print(f"\033[33mNo se encontraron imágenes en la carpeta '{INPUT_DIR}'\033[0m")
         os.system("pause")
@@ -125,8 +132,8 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     
     DECK_DIR = os.path.join(OUTPUT_DIR, crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m")))
 
-    PDF_FRONT = os.path.join(DECK_DIR, "deck_front.pdf")
-    PDF_BACK = os.path.join(DECK_DIR, "deck_back.pdf")
+    PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if DECK_DIR != "" else DECK_DIR}_front.pdf")
+    PDF_BACK = os.path.join(DECK_DIR, f"{'deck' if DECK_DIR != "" else DECK_DIR}_back.pdf")
     BACK_IMAGE = os.path.join('cartas_imprimir', BACK_NAME)
     os.makedirs(DECK_DIR, exist_ok=True)
     
