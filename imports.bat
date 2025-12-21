@@ -20,5 +20,7 @@ pip install cloudscraper
 echo.
 pip install pikepdf
 echo.
+pip install rich
+echo.
 echo Fin
 pause

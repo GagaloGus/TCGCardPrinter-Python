@@ -3,6 +3,7 @@ import sys
 import re
 import pikepdf
 import subprocess
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
@@ -212,28 +213,34 @@ Que dimensiones de carta quieres:
     count = 0
     dibujar_guias_pagina(c)
 
-    print("\n\033[36mGenerando PDF", end="")
-    for i in range(len(images)):
-        img_name = images[i]
-        # Se salta la imagen del dorso para evitar impresion innecesaria
-        if(img_name == BACK_NAME):
-            continue
+    with Progress(
+        TextColumn("[bold]Generando PDF..."), BarColumn(), TextColumn("[bold]{task.completed} / {task.total}"), TimeRemainingColumn()
+        ) as p:
+        task = p.add_task("", total=len(images))
         
-        img_path = os.path.join(INPUT_DIR, img_name)
-        img = comprimir_imagen(img_path)
+        for i in range(len(images)):
+            
+            img_name = images[i]
+            # Se salta la imagen del dorso para evitar impresion innecesaria
+            if(img_name == BACK_NAME):
+                continue
+            
+            img_path = os.path.join(INPUT_DIR, img_name)
+            img = comprimir_imagen(img_path)
 
-        c.drawImage(ImageReader(img), x, y, width=card_w, height=card_h)
+            c.drawImage(ImageReader(img), x, y, width=card_w, height=card_h)
 
-        count += 1
-        x += card_w + card_margin
-        if count % cols == 0:
-            x = x_start
-            y -= card_h + card_margin
-        if count % (cols*rows) == 0 and i < len(images) - 1: # nueva pagina
-            c.showPage()
-            dibujar_guias_pagina(c)
-            x, y = x_start, y_start
-        print(".", end="", flush=True)
+            count += 1
+            x += card_w + card_margin
+            if count % cols == 0:
+                x = x_start
+                y -= card_h + card_margin
+            if count % (cols*rows) == 0 and i < len(images) - 1: # nueva pagina
+                c.showPage()
+                dibujar_guias_pagina(c)
+                x, y = x_start, y_start
+                
+            p.update(task, advance=1)
 
     c.save()
     print()
