@@ -131,10 +131,11 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         
     print(f"\033[0mSe encontraron \033[36m{len(images)}\033[0m imágenes para imprimir.")
     
-    DECK_DIR = os.path.join(OUTPUT_DIR, crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m")))
+    deckName = crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m"))
+    DECK_DIR = os.path.join(OUTPUT_DIR, deckName)
 
-    PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if DECK_DIR != "" else DECK_DIR}_front.pdf")
-    PDF_BACK = os.path.join(DECK_DIR, f"{'deck' if DECK_DIR != "" else DECK_DIR}_back.pdf")
+    PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_front.pdf")
+    PDF_BACK = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_back.pdf")
     BACK_IMAGE = os.path.join('cartas_imprimir', BACK_NAME)
     os.makedirs(DECK_DIR, exist_ok=True)
     
@@ -211,7 +212,9 @@ Que dimensiones de carta quieres:
     c = canvas.Canvas(tempPDFName, pagesize=A4)
     x, y = x_start, y_start
     count = 0
+    
     dibujar_guias_pagina(c)
+    print("")
 
     with Progress(
         TextColumn("[bold]Generando PDF..."), BarColumn(), TextColumn("[bold]{task.completed} / {task.total}"), TimeRemainingColumn()

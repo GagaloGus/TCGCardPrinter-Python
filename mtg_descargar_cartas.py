@@ -1,4 +1,5 @@
 import sys
+from enum import Enum
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 import requests
 import re
@@ -10,19 +11,60 @@ OUTPUT_DIR = ""
 DOWNLOAD_LEN = 0
 N_ERROR_LOAD = 0
 N_ERROR_DOWNLOADS = 0
+    
+class CardType(Enum):
+    CREATURE = 0
+    ARTIFACT = 1
+    ENCHANTMENT = 2
+    INSTANT = 3
+    SORCERY = 4
+    PLANESWALKER = 5
+    LAND = 6
+    TOKEN = 7
+    OTHER = 99
+    
+    def __str__(self) -> str:
+        return self.name.capitalize()
+        
 
 class CardClass:
     def __init__(self, quantity:int, scryfall_url:str):    
         #Pide el JSON de scryfall al crear la carta
         self.jsonData = requests.get(scryfall_url).json()
         
-        self.cardMainName = self.jsonData["name"]
-        self.cardNames = list[str](self.cardMainName.split("//"))
-        self.cardTypes = list[str](self.jsonData["type_line"].split("//"))
+        #La carta tiene otra carta en la parte de atras
+        self.doubleCard = True
+        
+        # Cartas unicas o con parte de atras
+        if "type_line" in self.jsonData:
+            self.cardTypeText = list[str](self.jsonData["type_line"].split("//"))
+            self.cardMainName = self.jsonData["name"]
+            if len(self.cardTypeText) == 1:
+                self.doubleCard = False
+            
+        # Misma carta con diferente arte por las dos caras
+        elif "card_faces" in self.jsonData:
+            self.cardTypeText = list[str](self.jsonData["card_faces"][0]["type_line"].split("//"))
+            self.cardMainName = self.jsonData["card_faces"][0]["name"]
+        
+        self.cardMainName = str(self.cardMainName).strip()
+        self.cardNames = [n.strip() for n in self.cardMainName.split("//")] #Limpia los espacios del principio y fin de cada elemento de la lista
+
+        self.cardTypes = self.set_cardType()
+        
         self.quantity = quantity
         self.scryfall_url = scryfall_url
-        print(f"\033[33m[+]\033[0m Datos cargados: {self.cardMainName}")
-        
+        #({' '.join(map(str, self.cardType))})
+        print(f"\033[33m[+]\033[0m Datos cargados: ", end="")
+        if len(self.cardNames) == 1:
+            print(f"{self.cardNames[0]} \033[33m({self.cardTypes[0]})\033[0m")
+        else:
+            for i in range(len(self.cardNames)):
+                print(f"{self.cardNames[i]} \033[33m({self.cardTypes[i]})\033[0m", end="")
+                if(i < len(self.cardNames) - 1):
+                    print(" // ", end="")
+            print("")
+          
     def downloadImages(self, folder_path:str):
         global N_ERROR_DOWNLOADS
         try:   
@@ -36,17 +78,45 @@ class CardClass:
             else:
                 raise ValueError(f"No hay imagen para {self.cardMainName} / {self.scryfall_url}")            
             
-            for i, url in enumerate(img_urls):
+            for i in range(len(self.cardNames)):
+                url = img_urls[i]
                 img = requests.get(url).content
+                
                 for q in range(self.quantity):
-                    filepath = os.path.join(folder_path, crear_directorio_nuevo(f"{self.cardTypes[i].lower()}_{self.cardNames[i].lower()}_{q}.jpg"))    
+                    filepath = os.path.join(folder_path, crear_directorio_nuevo(f"{self.cardTypeText[i].lower()}_{self.cardNames[i].lower()}_{q}.jpg"))    
                     open(filepath, "wb").write(img)
                     print(f"\033[32m[Y]\033[0m Imagen descargada: {filepath}")
                     
         except Exception as e:
-            print(f"\033[31m[!]\033[0m Error bajando la imagen de {self.cardMainName}\n  \033[31m->\033[0m{e}")
+            print(f"\033[31m[!]\033[0m Error bajando la imagen de {self.cardMainName} //  \033[0m{e}")
             N_ERROR_DOWNLOADS += 1
     
+    def set_cardType(self) -> list[CardType]:
+        allTypes = []
+        
+        for type in self.cardTypeText:
+            type = type.lower()
+            if "token" in type:
+                allTypes.append(CardType.TOKEN)
+            elif "creature" in type:
+                allTypes.append(CardType.CREATURE)
+            elif "artifact" in type:
+                allTypes.append(CardType.ARTIFACT)
+            elif "enchantment" in type:
+                allTypes.append(CardType.ENCHANTMENT)
+            elif "land" in type:
+                allTypes.append(CardType.LAND)
+            elif "instant" in type:
+                allTypes.append(CardType.INSTANT)
+            elif "sorcery" in type:
+                allTypes.append(CardType.SORCERY)
+            elif "planeswalker" in type:
+                allTypes.append(CardType.PLANESWALKER)
+            else:
+                allTypes.append(CardType.OTHER)
+        
+        return allTypes    
+        
     def __str__(self):
         return f"{self.cardMainName} ({self.quantity}) -> {self.scryfall_url}"
 
@@ -220,7 +290,7 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
                     card = CardClass(quantity, url)
                     cards.append(card)
                 except Exception as e:
-                    print(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}")
+                    raise Exception(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}  //  \033[0m{e}")
                     N_ERROR_LOAD+=1
 
         # -------- MOXFIELD --------
@@ -263,7 +333,7 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
                     card = CardClass(quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
                     cards.append(card)
                 except Exception as e:
-                    print(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}") 
+                    print(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}  //  \033[0m{e}")
                     N_ERROR_LOAD+=1     
 
         else:
@@ -306,6 +376,9 @@ def main():
     
     #Carga las cartas en una lista
     cards = load_deck(platform, deck_id, prnt_tokens)
+    
+    #Ordena segun el tipo de carta
+    cards.sort(key=lambda c: c.cardTypes[0].value)
     
     print(f"\nSe encontraron \033[36m{DOWNLOAD_LEN}\033[0m cartas (sin contar repetidos).")
 
