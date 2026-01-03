@@ -9,6 +9,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from PIL import Image
+from basicFunctions import *
 
 EXTENSIONS_ALLOWED = [".png", ".jpg", ".jpeg", ".jfif", ".tiff", ".webp"]
 INPUT_DIR = "cartas_imprimir"
@@ -26,26 +27,6 @@ card_margin = 0
 x_start = 0
 y_start = 0
 
-def borrar_ultimas_lineas(num_lineas):
-    num_lineas+=1
-    # ANSI escape code para mover el cursor hacia arriba
-    sys.stdout.write("\033[F" * num_lineas)  # Mueve el cursor arriba
-    sys.stdout.write("\033[K" * num_lineas)  # Borra las líneas
-    sys.stdout.flush()
-
-def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
-    value = False
-    while True:
-        __inp = input(f"{text} [{trueOption}/{falseOption}]: \033[36m").lower()
-        if __inp in [trueOption, falseOption]:
-            value = __inp == trueOption
-            break
-        else:
-            print("\033[0m", end="")
-            borrar_ultimas_lineas(0)
-            print(f"\033[31m[Error: Opción no válida: {__inp}]\033[0m ", end="")
-    return value
-
 def comprimir_imagen(path, max_width_px=744, quality=85):
     img = Image.open(path).convert("RGB")
 
@@ -56,11 +37,6 @@ def comprimir_imagen(path, max_width_px=744, quality=85):
         img = img.resize(new_size, Image.Resampling.LANCZOS)
 
     return img
-
-def crear_directorio_nuevo(name: str) -> str:
-    # Reemplaza caracteres no admitidos
-    name = re.sub(r'[\\/:*?"<>|]', '_', name).strip()
-    return name
 
 def dibujar_guias_pagina(c: canvas.Canvas,dash: bool = True, lines_between_cards:bool = True):
     global cols, rows, card_w, card_h, card_margin, x_start, y_start

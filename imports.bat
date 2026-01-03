@@ -22,5 +22,7 @@ pip install pikepdf
 echo.
 pip install rich
 echo.
+pip install customtkinter
+echo.
 echo Fin
 pause
