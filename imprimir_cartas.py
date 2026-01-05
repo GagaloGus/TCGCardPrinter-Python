@@ -9,7 +9,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from PIL import Image
-from basicFunctions import *
+import basicFunctions
 
 EXTENSIONS_ALLOWED = [".png", ".jpg", ".jpeg", ".jfif", ".tiff", ".webp"]
 INPUT_DIR = "cartas_imprimir"
@@ -75,7 +75,7 @@ def comprimir_pdf(input_pdf: str, output_pdf: str):
         pdf = pikepdf.open(input_pdf)
         pdf.save(output_pdf, compress_streams=True)
         pdf.close()
-        borrar_ultimas_lineas(0)
+        basicFunctions.borrar_ultimas_lineas(0)
         os.remove(input_pdf)
     except Exception as e:
         print(f"\033[31mError comprimiendo PDF {input_pdf}: {e}\033[0m")
@@ -107,7 +107,7 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         
     print(f"\033[0mSe encontraron \033[36m{len(images)}\033[0m imágenes para imprimir.")
     
-    deckName = crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m"))
+    deckName = basicFunctions.crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m"))
     DECK_DIR = os.path.join(OUTPUT_DIR, deckName)
 
     PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_front.pdf")
@@ -127,46 +127,29 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         print("\n")
         tipo_carta = customTipoCarta
     else:
-        while True:
-            __inp = input(f"""\033[0m
-Que dimensiones de carta quieres:
-  1-> Magic The Gathering ({magicDim[0]}mm x {magicDim[1]}mm)
-  2-> Yugioh ({yugiDim[0]}mm x {yugiDim[1]}mm)
-  3-> Carta normal ({pokerDim[0]}mm x {pokerDim[1]}mm)
-  4-> Otro\n\033[36m""")
-            tipo_carta = int(__inp) if __inp.isdigit() else 0
+        print()
+        tipo_carta = basicFunctions.multiple_CustomChoice(
+            "Que dimensiones de carta quieres:",
+            [f"Magic The Gathering ({magicDim[0]}mm x {magicDim[1]}mm)", f"Yugioh ({yugiDim[0]}mm x {yugiDim[1]}mm)", f"Carta normal ({pokerDim[0]}mm x {pokerDim[1]}mm)", "Otro"],
+            ["-- Magic --", "-- YuGiOh --", "-- Carta normal --", "-- Custom --"]    
+        )
 
-            # Verificacion
-            if tipo_carta in [1, 2, 3, 4]:
-                break
-            else:
-                borrar_ultimas_lineas(5) 
-                print(f"\033[33m[Error: Opción no válida: {tipo_carta}] \033[0m", end="")
-
-            
-    # Mostrar las dimensiones seleccionadas
-    borrar_ultimas_lineas(0)
-    print(f"\033[33m{tipo_carta}-> ",end="")
     
-    if(tipo_carta == 1): #magic
-        print(f"-- Magic --")
+    if tipo_carta == 0: #magic
         card_w, card_h = magicDim[0]*mm, magicDim[1]*mm
-    elif(tipo_carta == 2): #yugi
-        print("-- YuGiOh --")
+    elif tipo_carta == 1: #yugi
         card_w, card_h = yugiDim[0]*mm, yugiDim[1]*mm
-    elif(tipo_carta == 3): #normal
-        print("-- Carta normal --")
+    elif tipo_carta == 2: #normal
         card_w, card_h = pokerDim[0]*mm, pokerDim[1]*mm
     else: #custom
-        print("-- Custom --")
         card_w = float(input("\033[33m  Anchura en milimetros: \033[36m"))*mm
         card_h = float(input("\033[33m  Altura en milimetros: \033[36m"))*mm
     
     print("\033[0m")
     
     # Configuracion del margen
-    has_margin = yesNo_CustomChoice("¿Quieres que haya margen entre las cartas?", "si", "no")
-    borrar_ultimas_lineas(0)
+    has_margin = basicFunctions.yesNo_CustomChoice("¿Quieres que haya margen entre las cartas?", "si", "no")
+    basicFunctions.borrar_ultimas_lineas(0)
     print(f"\033[33m-- {'Con' if has_margin else 'Sin'} Margen --\033[0m")
     
     card_margin = 5*mm if has_margin else 0.3*mm       

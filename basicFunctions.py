@@ -28,3 +28,29 @@ def yesNo_CustomChoice(text:str, trueOption:str, falseOption:str) -> bool:
             borrar_ultimas_lineas(0)
             print(f"\033[31m[Error: Opción no válida: {__inp}]\033[0m ", end="")
     return value
+
+def multiple_CustomChoice(text:str, options:list[str], results:list[str] = []) -> int:
+    if not results:
+        results = options.copy()
+    
+    while True:
+        print(f"\033[33m{text}\033[0m")
+        for i, opt in enumerate(options):
+            print(f"  {i}-> {opt}")
+        print("\033[36m", end="")
+        __inp = input()
+        
+        choice = int(__inp) if __inp.isdigit() else 0
+
+        # Verificacion
+        if choice in list(range(0, len(options))):
+            break
+        else:
+            borrar_ultimas_lineas(len(options)+1) 
+            print(f"\033[31m[Error: Opción no válida: {choice}] \033[0m", end="")
+
+            
+    # Mostrar las dimensiones seleccionadas
+    borrar_ultimas_lineas(0)
+    print(f"\033[33m{choice}-> {results[choice]}")
+    return choice

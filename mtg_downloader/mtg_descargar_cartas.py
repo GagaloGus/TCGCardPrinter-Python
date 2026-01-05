@@ -115,7 +115,7 @@ def get_download_lenght(platform:str, deck_id:str, prnt_tokens:bool) -> int:
 # ------------------------------------------------------------
 # Carga las cartas del mazo segun la plataforma
 # ------------------------------------------------------------
-def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
+def load_deck(platform:str, deck_id:str, prnt_tokens:bool, lang:str) -> list[CardClass]:
     global DOWNLOAD_LEN, N_ERROR_LOAD
     cards = []
             
@@ -138,30 +138,22 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
                 if any(x in cardTypes for x in skipTypes): #observa si se repite algun dato
                     continue
                 
-                multiverseID = c["card"]["multiverseid"]
                 editionCode = c["card"]["edition"]["editioncode"]
                 collectorNumber = c["card"]["collectorNumber"]
                 cardName = c["card"]["oracleCard"]["name"]
 
                 #Si es un token, que solo imprima 1
                 quantity = c["quantity"] if "Token" not in cardTypes else 1
-
-                url = ""                
-                #https://api.scryfall.com/cards/multiverse/<multiverseID>
-                if(multiverseID != 0):
-                    url = f"https://api.scryfall.com/cards/multiverse/{multiverseID}"
-
-                #https://api.scryfall.com/cards/<editionCode>/<collectorNumber>
-                else:
-                    url = f"https://api.scryfall.com/cards/{editionCode}/{collectorNumber}"
+            
+                url = f"https://api.scryfall.com/cards/{editionCode}/{collectorNumber}"
 
                 p.update(task, advance=1)   
                 try:             
-                    card = CardClass(quantity, url)
+                    card = CardClass(quantity, url, lang)
                     cards.append(card)
                 except Exception as e:
                     N_ERROR_LOAD+=1
-                    print(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}: {e.__str__()}")
+                    raise ValueError(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}: {e.__str__()}")
 
         # -------- MOXFIELD --------
         elif platform == "moxfield":
@@ -200,11 +192,11 @@ def load_deck(platform:str, deck_id:str, prnt_tokens:bool) -> list[CardClass]:
 
                 p.update(task, advance=1)   
                 try:             
-                    card = CardClass(quantity, f"https://api.scryfall.com/cards/{scryfallID}")    
+                    card = CardClass(quantity, f"https://api.scryfall.com/cards/{scryfallID}", lang)    
                     cards.append(card)
                 except Exception as e:
                     N_ERROR_LOAD+=1     
-                    print(f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}: {e.__str__()}")
+                    (f"\033[31m[!]\033[0m Error bajando la imagen de {cardName}: {e.__str__()}")
 
         else:
             raise ValueError(f"\033[31m[!] Plataforma no soportada: \033[0m'{platform}'")
@@ -229,7 +221,6 @@ def main():
         os.system("pause")
         os._exit(0)
         
-    
     #Muestra los datos obtenidos
     borrar_ultimas_lineas(0)
     print(f"\033[33m-- {deckName} --")
@@ -241,13 +232,27 @@ def main():
     borrar_ultimas_lineas(0)
     print(f"\033[33mImprimir tokens: \033[0m'{'Si' if prnt_tokens else 'No'}'")
     
+    #Pregunta el idioma de las cartas
+    card_lang = multiple_CustomChoice(
+        "Elige el idioma de las cartas:",
+        ["Original", "English", "Español"]
+    )
+    
+    if card_lang == 1:
+        card_lang = "en"
+    if card_lang == 2:
+        card_lang = "es"
+    else:
+        card_lang = "orig"
+        
+    
     #Obtiene la longitud del mazo
     print("\nObteniendo longitud del mazo...")
     DOWNLOAD_LEN = get_download_lenght(platform, deck_id, prnt_tokens)
     borrar_ultimas_lineas(0)
     
     #Carga las cartas en una lista
-    cards = load_deck(platform, deck_id, prnt_tokens)
+    cards = load_deck(platform, deck_id, prnt_tokens, card_lang)
     
     #Ordena segun el tipo de carta
     cards.sort(key=lambda c: c.cardTypes[0].value)
