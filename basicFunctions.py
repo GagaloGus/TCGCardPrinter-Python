@@ -54,3 +54,4 @@ def multiple_CustomChoice(text:str, options:list[str], results:list[str] = []) -
     borrar_ultimas_lineas(0)
     print(f"\033[33m{choice}-> {results[choice]}")
     return choice
+

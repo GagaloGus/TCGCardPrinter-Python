@@ -124,7 +124,6 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     #Tipo de carta custom por si se llama desde otro script
     customTipoCarta = int(customTipoCarta)
     if customTipoCarta != -1 and customTipoCarta in [1, 2, 3, 4]:
-        print("\n")
         tipo_carta = customTipoCarta
     else:
         print()
@@ -133,7 +132,6 @@ def main(customInputDir = "", customTipoCarta = "-1"):
             [f"Magic The Gathering ({magicDim[0]}mm x {magicDim[1]}mm)", f"Yugioh ({yugiDim[0]}mm x {yugiDim[1]}mm)", f"Carta normal ({pokerDim[0]}mm x {pokerDim[1]}mm)", "Otro"],
             ["-- Magic --", "-- YuGiOh --", "-- Carta normal --", "-- Custom --"]    
         )
-
     
     if tipo_carta == 0: #magic
         card_w, card_h = magicDim[0]*mm, magicDim[1]*mm

@@ -24,5 +24,9 @@ pip install rich
 echo.
 pip install customtkinter
 echo.
+pip install httpx
+echo.
+pip install aiometer
+echo.
 echo Fin
 pause

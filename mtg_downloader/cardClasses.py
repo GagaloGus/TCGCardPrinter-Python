@@ -9,6 +9,21 @@ from urllib.request import urlopen
 sys.path.insert(1, "/".join(os.path.realpath(__file__).split("/")[0:-2]))
 from basicFunctions import *
 
+# ---------------- CACHE GLOBAL ----------------
+SCRYFALL_URL_CACHE = {}          # cache por URL / Guarda el JSON entero de Scryfall para cada url
+ORACLE_LANG_CACHE = {}           # cache por oracle_id + lang / Guarda el JSON por Oracle ID + Idioma
+
+SESSION = requests.Session()     # reutiliza conexiones HTTP
+
+def cached_get(url: str):
+    if url in SCRYFALL_URL_CACHE:
+        return SCRYFALL_URL_CACHE[url]
+
+    response = SESSION.get(url)
+    data = response.json()
+    SCRYFALL_URL_CACHE[url] = data
+    return data
+
 class CardType(Enum):
     ARTIFACT = 0
     BATTLE = 1
@@ -66,27 +81,35 @@ class CardType(Enum):
         return self.name.capitalize()  
 
 class CardClass:
-    def __init__(self, quantity:int, scryfall_url:str, lang:str = "orig"):       
+    def __init__(self, quantity:int, scryfall_url:str, lang:str = "orig", base_jsonData=None):       
         self.quantity = quantity
         self.scryfall_url = scryfall_url
         self.lang = lang
+        
         self.oracle_id = ""
+        self.layout = ""
+        self.altLang = False
+        
         self.cardMainName = ""
-        self.cardNames = []
+        self.cardNames = []       
         self.cardTypeText = []
         self.img_urls = []
         
-        #0 = arte unico / 1 = mismo arte por ambas caras / 2 = 2 cartas diferentes
-        self.jsonData, self.layout, self.oracle_id = self._fetch_base_json()
+        # ---------- BASE JSON (SIEMPRE HACE 1 REQUEST SI NO SE LE HA PASADO EL PARAMETRO) ----------
+        self.jsonData = self._fetch_base_json() if base_jsonData == None else base_jsonData
         
+        # ---------- IDIOMA ALTERNATIVO (USANDO CACHE) ----------
         if self.lang != "orig":
-            self.jsonData, self.altLang, self.layout = self._fetch_altLang_json()    
+            self.jsonData, self.altLang = self._fetch_altLang_json()    
              
+        # ---------- PARSEO DE DATOS ----------   
+        self.layout = self._get_card_layout()
+        self.oracle_id = self._get_oracle_id()
         self._parse_card_data()
-        
-        #Le da el tipo con un Enum
-        self.cardTypes = self.set_cardType()
+        self.cardTypes = self._get_cardType()
+        self.quantity = 1 if CardType.TOKEN in self.cardTypes else self.quantity #Cambia la cantidad a 1 si es un token
            
+        # ---------- IMAGENES ----------
         if "image_uris" in self.jsonData:
             self.img_urls.append(self.jsonData["image_uris"]["border_crop"])
         elif "card_faces" in self.jsonData:
@@ -95,21 +118,21 @@ class CardClass:
         else:
             raise ValueError(f"No hay imagen para {self.cardMainName} / {self.scryfall_url}") 
         
+        # ---------- LOG IMPRESO POR CONSOLA ----------
         print(f"\033[33m[+]\033[0m Datos cargados: ", end="")
         if len(self.cardNames) == 1:
             print(f"{self.cardNames[0]} \033[33m({self.cardTypes[0].__str__(self.lang)})\033[0m")
         else:
             for i in range(len(self.cardNames)):
-                print(f"{self.cardNames[i]} \033[33m({self.cardTypes[i].__str__(self.lang)})\033[0m", end="")
-                if(i < len(self.cardNames) - 1):
-                    print(" // ", end="")
-            print("")
+                print(
+                    f"{self.cardNames[i]} \033[33m({self.cardTypes[i].__str__(self.lang)})\033[0m", 
+                    end=" // " if i < len(self.cardNames) - 1 else "\n")
             
     def _parse_card_data(self):
         # Carta con otra carta por atras
         if self.layout != "single":
             name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"])
-            #misma carta por ambas caras, diferente arte
+            # misma carta por ambas caras, diferente arte
             if self.layout == "reversible":
                 self.cardMainName = name1
                 self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
@@ -120,7 +143,7 @@ class CardClass:
                 self.cardMainName = f"{name1} // {name2}"
                 self.cardTypeText += self.jsonData["type_line"].split("//") 
         
-                # Cartas unicas
+        # Cartas unicas
         else:
             self.cardTypeText.append(self.jsonData["type_line"])
             self.cardMainName = self.jsonData["printed_name" if self.altLang else "name"]
@@ -130,48 +153,37 @@ class CardClass:
         self.cardNames = [n.strip() for n in self.cardMainName.split("//")] #Limpia los espacios del principio y fin de cada elemento de la lista
     
     def _fetch_base_json(self):
-        data = requests.get(self.scryfall_url).json()
-        
-        layout = self._get_card_layout(data)
-        
-        if layout == "reversible":
-            oracle_id = data["card_faces"][0]["oracle_id"]
-        else:
-            oracle_id = data["oracle_id"]
-        
-        return data, layout, oracle_id
+        return cached_get(self.scryfall_url)
     
-    def _fetch_altLang_json(self):         
-        # -1- Busca en el idioma pedido en el mismo set
-        data = requests.get(f"{self.scryfall_url}/{self.lang}").json()
-        if data["object"] != "error":
-            return data, True, self._get_card_layout(data)
+    def _fetch_altLang_json(self):       
+        cache_key = f"{self.oracle_id}:{self.lang}"
+        
+        # ----- [1] MIRA SI EXISTE YA EN LA CACHE -----
+        if cache_key in ORACLE_LANG_CACHE:
+            return ORACLE_LANG_CACHE[cache_key]
+        
+        # ----- [2] BUSCA EN EL MISMO SET -----
+        #data = cached_get(f"{self.scryfall_url}/{self.lang}")
+        #if data.get("object") != "error":
+        #    result = (data, True, self._get_card_layout(data))
+        #    ORACLE_LANG_CACHE[cache_key] = result
+        #    return result
             
-        # -2- La busca en otro set en el idioma pedido usando su Oracle_ID
+        # ----- [3] BUSCA EN OTRO SET USANDO ORACLE -----
         url = f"https://api.scryfall.com/cards/search?q=oracleid:{self.oracle_id}+lang:{self.lang}"
-        data = requests.get(url).json()
+        data = cached_get(url)
         
-        if data["object"] == "list" and data["total_cards"] >= 1:
-            return data["data"][0], True, self._get_card_layout(data["data"][0])
+        if data.get("object") == "list" and data["total_cards"] >= 1:
+            card = data["data"][0]
+            result = (card, True)
+            ORACLE_LANG_CACHE[cache_key] = result
+            return result
             
-        # -3- Si no hay ninguna version en el idioma pedido, la devuelve en el idioma original
-        return self.jsonData, False, self.layout
-    
-    def _get_card_layout(self, data):            
-        # Carta con otra carta por atras
-        if "card_faces" in data:
-            name1 = str(data["card_faces"][0]["name"])
-            name2 = str(data["card_faces"][1]["name"])
-            #misma carta por ambas caras, diferente arte
-            if name1 == name2:
-                return "reversible"
-            # dos cartas diferentes
-            else:
-                return "double"
-        # Cartas unicas
-        else:
-            return "single"       
-        
+        # ----- [4] FALLBACK EN IDIOMA ORIGINAL -----
+        result = (self.jsonData, False)
+        ORACLE_LANG_CACHE[cache_key] = result
+        return result
+     
     def showImage(self) -> list:
         imgs = []
         for i in range(len(self.cardNames)):
@@ -189,8 +201,32 @@ class CardClass:
                 open(filepath, "wb").write(img)
                 print(f"\033[32m[Y]\033[0m Imagen descargada: {filepath}")
                     
+    def _get_card_layout(self) -> str:            
+        # Carta con otra carta por atras
+        if "card_faces" in self.jsonData:
+            name1 = str(self.jsonData["card_faces"][0]["name"])
+            name2 = str(self.jsonData["card_faces"][1]["name"])
+            #misma carta por ambas caras, diferente arte
+            if name1 == name2:
+                return "reversible"
+            # dos cartas diferentes
+            else:
+                return "double"
+        # Cartas unicas
+        else:
+            return "single"    
+           
+    def _get_oracle_id(self) -> str:
+        if self.layout == "":
+            self.layout = self._get_card_layout()
+        
+        if self.layout == "reversible":
+            oracle_id = self.jsonData["card_faces"][0]["oracle_id"]
+        else:
+            oracle_id = self.jsonData["oracle_id"]   
+        return oracle_id 
     
-    def set_cardType(self) -> list[CardType]:
+    def _get_cardType(self) -> list[CardType]:
         allTypes = []
         preference = [CardType.TOKEN, CardType.CREATURE]
         for ty in CardType:
@@ -213,4 +249,4 @@ class CardClass:
         return allTypes    
         
     def __str__(self):
-        return f"{self.cardMainName} ({self.quantity}) -> {self.scryfall_url}"
+        return f"{self.cardMainName} (Idioma original: {self.altLang}) ({self.quantity}) -> {self.scryfall_url}"
