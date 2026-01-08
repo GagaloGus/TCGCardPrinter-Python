@@ -5,13 +5,9 @@ from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 # Añade el directorio de arriba para usar scripts fuera de la carpeta
 sys.path.insert(1, "/".join(os.path.realpath(__file__).split("/")[0:-2]))
 from basicFunctions import *
-from cardClasses import CardClass, CardType
-from request_calls import 
+from cardClasses import CardClass, CardType, CardScraper
 
 # ---------------- CONFIG ----------------
-# -- RATE REQUESTS ---
-MAX_REQUESTS_PER_SEC = 2
-
 # -- FILES --
 OUTPUT_DIR = ""
 DOWNLOAD_LEN = 0
@@ -106,30 +102,25 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
             card_infos.append((quantity,url))
 
     cards = []
+    qty_map = {url: qty for qty, url in card_infos}
+    
     with Progress(
         TextColumn("[bold]Obteniendo cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
     ) as progress:
         task = progress.add_task("", total=len(card_infos))
-
-        def create_card(info):
-            global N_ERROR_LOAD
-            qty, url = info
-            try:
-                card = CardClass(qty, url, lang)
-                return card
-            except Exception as e:
-                N_ERROR_LOAD += 1
-                raise Exception(f"\033[31m[!]\033[0m Error cargando carta {url}: {e}")
-                return None
+        
+        # le carga todas las urls
+        cardScraper = CardScraper([i[1] for i in card_infos], lang)
+        print("Iniciar card scraper..")
+        cardScraper.run()
+        
+        for url, json in cardScraper.finishedJsons:
+            quantity = qty_map.get(url, 1) #Default 1 por si acaso
+            card = CardClass(json, quantity, lang, url)
+            cards.append(card)
             
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = [executor.submit(create_card, info) for info in card_infos]
-            for future in as_completed(futures):
-                c = future.result()
-                if c: 
-                    print("a")
-                    cards.append(c)
-                    progress.update(task, advance=1)
+            progress.update(task, advance=1)
+            time.sleep(0.05)
 
     return sorted(cards, key=lambda c: c.cardTypes[0].value)
 
@@ -139,7 +130,6 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
 def main():
     global OUTPUT_DIR, N_ERROR_DOWNLOADS, DOWNLOAD_LEN
     # ---------- SETUP
-    start_semaphore(MAX_REQUESTS_PER_SEC)
     
     print("\033[33m======= DESCARGAR CARTAS MAGIC THE GATHERING =======\033[0m")
     print("- Plataformas admitidas: Archidekt, Moxfield\n")

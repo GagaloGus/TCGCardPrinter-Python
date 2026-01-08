@@ -1,28 +1,42 @@
 import sys, os, re, requests, cloudscraper, subprocess, time, threading, asyncio
-
+from functools import partial
 import aiometer, httpx
 
-MAX_REQUESTS_PER_SEC = 3
 
+MAX_REQUESTS_PER_SEC = 3
 session = httpx.AsyncClient()
 
-async def scrape(url):
-    response = await session.get(url)
-    return response
+async def __scrape(url, result):
+    try:
+        response = await session.get(url)
+        result.append(response.json())
+        print(f"Scrappeo completado de {url}")
+        return response.json()
+    except Exception as e:
+        print(e)
+        return None
+        
 
-async def run():
+async def __scrape_json(urls : list[str], max_per_sec, result):
     _start = time.time()
-    urls = ["https://api.scryfall.com/cards/multiverse/1508" for i in range(10)]
-    results = await aiometer.run_on_each(
-        scrape, 
+    
+    scrape_with_result = partial(__scrape, result=result)
+    
+    await aiometer.run_on_each(
+        scrape_with_result, 
         urls,
-        max_per_second=2.5,  # here we can set max rate per second
+        max_per_second=max_per_sec,  # here we can set max rate per second
     )
     print(f"finished {len(urls)} requests in {time.time() - _start:.2f} seconds")
-    return results
+
+def run(urls : list[str], result, max_per_sec = 2.5):
+    asyncio.run(__scrape_json(urls, max_per_sec, result))
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    urls = ["https://api.scryfall.com/cards/multiverse/1508" for _ in range(10)]
+    res = []
+    run(urls, res)
+    print(res)
 
 #semaphore = threading.Semaphore(MAX_REQUESTS_PER_SEC)
 #
@@ -45,3 +59,4 @@ if __name__ == "__main__":
 #    MAX_REQUESTS_PER_SEC = max_req_per_sec
 #    semaphore = threading.Semaphore(MAX_REQUESTS_PER_SEC)
 #    __refill_semaphone()
+#
