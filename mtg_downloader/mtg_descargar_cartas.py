@@ -1,4 +1,4 @@
-import sys, os, re, requests, cloudscraper, subprocess, time, threading
+import sys, os, re, requests, cloudscraper, subprocess, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 
@@ -76,7 +76,7 @@ def get_download_length(platform: str, deck_id: str, prnt_tokens: bool) -> int:
 def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list[CardClass]:
     global N_ERROR_LOAD
     data = get_json(platform, deck_id)
-    card_infos = []
+    card_url_qty_pair = {}
 
     if platform == "archidekt":
         skip = ["Maybeboard"] + ([] if prnt_tokens else ["Token"])
@@ -87,7 +87,7 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
             quantity = c["quantity"] if "Token" not in card_types else 1
             edition, number = c["card"]["edition"]["editioncode"], c["card"]["collectorNumber"]
             url = f"https://api.scryfall.com/cards/{edition}/{number}"
-            card_infos.append((quantity, url))
+            card_url_qty_pair[url] = quantity
     else:  # moxfield
         all_cards = []
         for sec in ["mainboard","commanders","companions","signatureSpells"]:
@@ -99,23 +99,22 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
             card_data = c.get("card", c)
             quantity = c.get("quantity", 1)
             url = f"https://api.scryfall.com/cards/{card_data['scryfall_id']}"
-            card_infos.append((quantity,url))
+            card_url_qty_pair[url] = quantity
 
     cards = []
-    qty_map = {url: qty for qty, url in card_infos}
     
     with Progress(
         TextColumn("[bold]Obteniendo cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
     ) as progress:
-        task = progress.add_task("", total=len(card_infos))
+        task = progress.add_task("", total=len(card_url_qty_pair))
         
         # le carga todas las urls
-        cardScraper = CardScraper([i[1] for i in card_infos], lang)
+        cardScraper = CardScraper([i for i in list(card_url_qty_pair.keys())], lang)
         print("Iniciar card scraper..")
         cardScraper.run()
         
-        for url, json in cardScraper.finishedJsons:
-            quantity = qty_map.get(url, 1) #Default 1 por si acaso
+        for (url, json, scry_url) in cardScraper.finishedJsons:
+            quantity = card_url_qty_pair.get(scry_url, 1) #Default 1 por si acaso
             card = CardClass(json, quantity, lang, url)
             cards.append(card)
             
