@@ -14,6 +14,8 @@ SCRYFALL_URL_CACHE = {}          # cache por URL / Guarda el JSON entero de Scry
 ORACLE_URL_CACHE = {}           # cache por oracle_id + lang / Guarda el JSON por Oracle ID + Idiom
 CACHE_LIFETIME_SEC = 24 * 60 * 60 # Un dia
 MAX_REQ_PER_SEC = 5
+print("el guevo mio")
+
 
 class CardType(Enum):
     ARTIFACT = 0
@@ -75,7 +77,7 @@ class CardScraper:
     """
         1. Obtiene todas las urls
         2. las pasa por el scraper para obtener todos los jsons
-        3. si el idioma es "orig" scrapedJsons sera igual a rawJsons, si no, se obtiene su url con su oracle_id y se scrapean una vez mas
+        3. si el idioma es "orig" se devuelven los jsons de scryfall, si no, se obtiene su url con su oracle_id y se scrapean una vez mas
         4. Devuelve una lista de una tupla que contiene: 
             la url de donde se obtuvo el JSON
             el JSON
@@ -106,6 +108,7 @@ class CardScraper:
     async def _scrape_all_urls(self):
         clean_urls = []
         clean_url_json_pairs = []
+        scryfall_json_dict = {}
         
         #-- Checkea si esta el json original en la cache
         print("\033[33minicio filtrado de urls\033[0m")
@@ -115,23 +118,31 @@ class CardScraper:
             else:
                 clean_urls.append(u)
         
-        #-- Screapea nuevas urls para obtener sus jsons
-        print(f"\033[33minicio scrapeo de url con {len(clean_urls)} resultados // Se cachearon {len(self.rawJsons)} cartas\033[0m")
-        await url_scraper(clean_urls, clean_url_json_pairs, MAX_REQ_PER_SEC)     
+        if len(clean_urls) > 0:
+            #-- Screapea nuevas urls para obtener sus jsons
+            print(f"\033[33minicio scrapeo de url con {len(clean_urls)} resultados // Se cachearon {len(self.rawJsons)} cartas\033[0m")
+            await url_scraper(clean_urls, clean_url_json_pairs, MAX_REQ_PER_SEC)     
 
-        #-- Parsea y cachea urls de scryfall
-        print("\033[33minicio cacheo de urls\033[0m")
-        for i, (url, json) in enumerate(clean_url_json_pairs):
-            try:
-                SCRYFALL_URL_CACHE[url] = json  
-                self.rawJsons.append((url, json, url))
-                print(f"\033[32mAñadido: \033[0m{url}")
-            except Exception as e:
-                print(f"Dio URL error '{url}': {type(e)} // {e}")
-                self.errors += 1
-        
-        print(f"\033[33mSe obtuvieron {len(self.rawJsons)} resultados filtrados de URL\033[0m")
-        
+            #-- Parsea y cachea urls de scryfall
+            print("\033[33minicio cacheo de urls\033[0m")
+            for i, (url, json) in enumerate(clean_url_json_pairs):
+                try:
+                    SCRYFALL_URL_CACHE[url] = json  
+                    self.rawJsons.append((url, json, url))
+                    scryfall_json_dict[url] = json
+                    #print(f"\033[36mAñadido SCRYFALL: \033[0m{url}")
+                except Exception as e:
+                    print(f"Dio URL error '{url}': {type(e)} // {e}")
+                    self.errors += 1
+            
+            print(f"\033[33mSe obtuvieron {len(self.rawJsons)} resultados filtrados de URL\033[0m")
+        else:
+            #-- Mete todas las cartas cacheadas en el diccionario porsiaca
+            for (url, json, scryUrl) in self.rawJsons:
+                scryfall_json_dict[url] = json
+                
+            print(f"\033[33mSe cachearon todas las cartas de \033[36mSCRYFALL\033[33m! ({len(self.rawJsons)} cartas)\033[0m")
+            
         #-- Si es el idioma original, ya esta
         if not self.altLang:
             self.finishedJsons = self.rawJsons.copy()
@@ -159,51 +170,36 @@ class CardScraper:
                 else:
                     oracle_url_pairs[oracle_url] = scryUrl
 
-            #-- Scrapea las urls con su oracle_id
-            print(f"\033[33minicio scrapeo de oracle_id con {len(clean_urls)} resultados // Se cachearon {len(self.finishedJsons)} cartas\033[0m")
-            await url_scraper([url for url in list(oracle_fallback_url_pairs.keys())], oracle_url_json_pairs, MAX_REQ_PER_SEC)
-            
-            #-- Parsea y cachea urls
-            print("\033[33minicio cacheo de oracle_id\033[0m")
-            for i, (url, json) in enumerate(oracle_url_json_pairs):
-                original_scry_url = oracle_url_pairs[url]
-                
-                try:
-                    card_json = json["data"][0]
-                    ORACLE_URL_CACHE[url] = card_json
-                    
-                    self.finishedJsons.append((url, card_json, original_scry_url))
-                    print(f"\033[32mAñadido: \033[0m{url}")
-                except Exception as e:
-                    print(f"Dio ORACLE error '{url}': {type(e)} // {e}") 
+            if len(oracle_url_pairs) > 0:
+                #-- Scrapea las urls con su oracle_id
+                print(f"\033[33minicio scrapeo de oracle_id con {len(oracle_url_pairs)} resultados // Se cachearon {len(self.finishedJsons)} cartas\033[0m")
+                await url_scraper(list(oracle_url_pairs.keys()), oracle_url_json_pairs, MAX_REQ_PER_SEC)
 
-                    #Quita el "+lang:en" de la url de oracle
-                    oracle_fallback_url_pairs[url[:-8]] = original_scry_url
-                    print(f"  |-> Se añadio a fallback: {url[:-8]}")
-
-            #-- Si hay algun fallback, hace otra llamada sin su lang
-            if len(oracle_fallback_url_pairs) > 0:
-                oracle_fallback_pairs = []
-                
-                #-- Scrapea las urls
-                print(f"\033[33minicio scrapeo de {len(oracle_fallback_url_pairs)} fallbacks de oracle_id\033[0m")
-                await url_scraper([url for url in list(oracle_fallback_url_pairs.keys())], oracle_fallback_pairs, MAX_REQ_PER_SEC)
-                
                 #-- Parsea y cachea urls
                 print("\033[33minicio cacheo de oracle_id\033[0m")
-                for i, (url, json) in enumerate(oracle_fallback_pairs):
-                    original_scry_url = oracle_fallback_url_pairs[i][1]
-                    
+                for i, (url, json) in enumerate(oracle_url_json_pairs):
+                    original_scry_url = oracle_url_pairs[url]
+
                     try:
                         card_json = json["data"][0]
-                        ORACLE_URL_CACHE[f"{url}+lang:{self.lang}"] = card_json #Cachea en idioma pedido para que no vuelva a pasar
-                        
+                        ORACLE_URL_CACHE[url] = card_json
+
                         self.finishedJsons.append((url, card_json, original_scry_url))
-                        print(f"\033[32mAñadido: \033[0m{url}")
+                        print(f"\033[32mAñadido ORACLE: \033[0m{url}")
                     except Exception as e:
-                        print(f"Dio Fallback error '{url}': {type(e)} // {e}") 
-                        self.errors += 1
-                     
+                        card_json = SCRYFALL_URL_CACHE.get(original_scry_url, None)
+                        if not card_json:
+                            card_json = scryfall_json_dict[original_scry_url]   
+
+                        ORACLE_URL_CACHE[url] = card_json 
+
+                        self.finishedJsons.append((original_scry_url, card_json, original_scry_url))
+                        print(f"\033[36mUrl original de SCRYFALL: \033[0m{url}") 
+
+            else:
+                print(f"\033[33mSe cachearon todas las cartas de \033[31mORACLE\033[33m! ({len(self.finishedJsons)} cartas)\033[0m")
+                
+                    
         print(f"\033[33mFin // Se obtuvieron {len(self.finishedJsons)} resultados\033[0m")     
     
     def _save_json_cache(self):
@@ -383,3 +379,6 @@ def _get_card_oracle_id(jsonData, layout="") -> str:
     else:
         oracle_id = jsonData["oracle_id"]   
     return oracle_id 
+
+if __name__ == "__main__":
+    pass

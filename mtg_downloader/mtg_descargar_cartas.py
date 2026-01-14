@@ -109,8 +109,7 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
         task = progress.add_task("", total=len(card_url_qty_pair))
         
         # le carga todas las urls
-        cardScraper = CardScraper([i for i in list(card_url_qty_pair.keys())], lang)
-        print("Iniciar card scraper..")
+        cardScraper = CardScraper(list(card_url_qty_pair.keys()), lang)
         cardScraper.run()
         
         for (url, json, scry_url) in cardScraper.finishedJsons:
@@ -150,7 +149,7 @@ def main():
     prnt_tokens = yesNo_CustomChoice("¿Quieres cargar tambien los tokens?", "si", "no")
     borrar_ultimas_lineas(0)
     print(f"\033[33mTokens:\033[0m {'Si' if prnt_tokens else 'No'}")
-    card_lang = multiple_CustomChoice("Elige el idioma de las cartas:", ["Original","English","Español"])
+    card_lang = multiple_CustomChoice("Elige el idioma de las cartas:", ["Original (Mejor calidad)","English","Español"])
     card_lang = ["orig","en","es"][card_lang]
 
     print("\nObteniendo longitud del mazo...")
