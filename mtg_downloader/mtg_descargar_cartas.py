@@ -118,7 +118,7 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
             cards.append(card)
             
             progress.update(task, advance=1)
-            time.sleep(0.05)
+            #time.sleep(0.01)
 
     return sorted(cards, key=lambda c: c.cardTypes[0].value)
 
