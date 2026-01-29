@@ -10,7 +10,6 @@ __pycache__/
 card_cache/
 cartas/
 cartas_imprimir/
-img/
 pdf/
 
 # Distribution / packaging

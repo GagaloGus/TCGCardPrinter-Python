@@ -1,5 +1,6 @@
 import customtkinter as gui
-import os
+from tkinter import filedialog
+import os, threading
 from urllib.request import urlopen
 from PIL import Image
 import mtg_descargar_cartas
@@ -80,6 +81,23 @@ class MyRadioButtonFrame(gui.CTkFrame):
     
     def set(self, value):
         self.variable.set(value)
+
+class FolderPicker(gui.CTkFrame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.grid_columnconfigure(0, weight=1)
+
+        self.entry = gui.CTkEntry(self, placeholder_text="Selecciona una carpeta...")
+        self.entry.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="we")
+
+        self.btn = gui.CTkButton(self, text="📂", width=40, command=self.select_folder)
+        self.btn.grid(row=0, column=1, padx=(0, 10), pady=10)
+
+    def select_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.entry.delete(0, "end")
+            self.entry.insert(0, folder)
 
 class CardShowcaseFrame(gui.CTkFrame):
     def __init__(self, master, platform:str, deck_id:str):
@@ -169,22 +187,32 @@ class DeckLoaderFrame(gui.CTkFrame):
         self.langFrame = LanguageChooseFrame(self, LANGUAGES)
         self.langFrame.grid(row= 1, column = 0, padx = 10, pady = (10, 0), sticky="nswe")
 
-        self.btn_search = gui.CTkButton(self, text="Buscar mazo", command=self.buscar_mazo)
+        self.btn_search = gui.CTkButton(self, text="Comprobar datos de mazo", command=self.comprobar_datos)
         self.btn_search.grid(row= 2, column = 0, padx = 10, pady = (10, 0), sticky="nswe")
+        
+        self.folder_input = FolderPicker(self)
+        self.folder_input.grid(row= 3, column = 0, padx = 10, pady = (10, 0), sticky="nswe")
 
-        self.debugText = gui.CTkLabel(self, text=f"aloooo")
-        self.debugText.grid(row= 3, column = 0, padx = 10, pady = (5, 0), sticky="w")  
+        self.debugText = gui.CTkLabel(self, text=f"aloooo", anchor="nw", justify="left")
+        self.debugText.grid(row= 4, column = 0, padx = 10, pady = (5, 0), sticky="w")  
     
-    def buscar_mazo(self):
-        self.debugText.configure(text=f"Obteniendo cartas...")
+    def get_deck_data(self):
         url = self.input_url.get()
         platform, id = mtg_descargar_cartas.get_platform_and_id(url)
+        deckName = mtg_descargar_cartas.get_json(platform, id)["name"]
         lang = self.langFrame.get()
+        return (platform, id, lang, deckName)
+    
+    def comprobar_datos(self):
+        try:
+            self.btn_search.configure(True, state="disabled")
+            platform, id, lang, deckName = self.get_deck_data()
 
-        print(f"{platform} / {id} / {lang}")
-        self.deck = mtg_descargar_cartas.load_deck(platform, id, True, lang)
-
-        self.debugText.configure(text=f"Cartas obtenidas: {len(self.deck)}")
+            self.debugText.configure(text=f"====== DATOS DEL MAZO ======\n\n[ {deckName} ]\nPlataforma: {platform}\nID: {id}\nIdioma: {LANGUAGES.get(lang, "no se")}")
+            self.btn_search.configure(True, state="normal")
+        except Exception as e:
+            self.btn_search.configure(True, state="normal")
+            self.debugText.configure(text=e)    
 
 class App(gui.CTk):
     def __init__(self):
@@ -192,30 +220,64 @@ class App(gui.CTk):
         self.title("Soy homero chino")
         self.iconbitmap(ICON_PATH)
         self.geometry("800x600")
-        self.grid_columnconfigure((0,1,2), weight=1)
+        self.grid_columnconfigure((0,1,2,3,4), weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         self.titleText = gui.CTkLabel(self, text="Titulo do Aplicação", font=("Arial", 20, "bold"))
-        self.titleText.grid(row= 0, column = 0, padx = 0, pady = (10, 0), sticky="we", columnspan = 3)
+        self.titleText.grid(row= 0, column = 0, padx = 0, pady = (10, 0), sticky="we", columnspan = 5)
 
         self.url_info = DeckLoaderFrame(self)
-        self.url_info.grid(row= 1, column = 0, padx = 10, pady = (10, 0), sticky="nswe", rowspan=2)
-
-        self.checkboxFrame1 = MyCheckboxFrame(self, values=["pito", "pete", "puta", "pato"], title="Check")
-        self.checkboxFrame1.grid(row= 1, column = 2, padx = 10, pady = (10, 0), sticky="nswe", rowspan=2)
+        self.url_info.grid(row= 1, column = 0, padx = 10, pady = (10, 0), sticky="nswe", columnspan = 2)
         
         self.cardFrame = CardShowcaseFrame(self, "moxfield", "rFMAHnn5EkCVWCtNJQ7CkA")
-        self.cardFrame.grid(row= 1, column = 1, padx = 10, pady = (10, 0), sticky="nswe", rowspan=2)
+        self.cardFrame.grid(row= 1, column = 2, padx = 10, pady = (10, 0), sticky="nswe", columnspan = 3)
+
+        #self.checkboxFrame1 = MyCheckboxFrame(self, values=["pito", "pete", "puta", "pato"], title="Check")
+        #self.checkboxFrame1.grid(row= 1, column = 4, padx = 10, pady = (10, 0), sticky="nswe")
         
-         
-        self.btn = gui.CTkButton(self, text="Soy homero", command=self.btn_callback)
-        self.btn.grid(row= 3, column = 0, padx = 20, pady = 20, sticky="we", columnspan=3)
+        #self.btn_load_deck = gui.CTkButton(self, text="Cargar imagenes del mazo", command=self.load_deck)
+        #self.btn_load_deck.grid(row= 2, column = 0, padx = 20, pady = 20, sticky="we", columnspan=2)
+        #
+        #self.btn_download_deck = gui.CTkButton(self, text="Descargar imagenes", command=self.btn_callback)
+        #self.btn_download_deck.grid(row= 2, column = 2, padx = 20, pady = 20, sticky="we", columnspan=2)
+        # 
+        #self.btn = gui.CTkButton(self, text="Soy homero", command=self.btn_callback)
+        #self.btn.grid(row= 2, column = 4, padx = 20, pady = 20, sticky="we", columnspan=1)
 
         
-        
     def btn_callback(self):
-        print(f"Checkboxes marcadas: {self.checkboxFrame1.get()}")
+        print("peo")
+        #print(f"Checkboxes marcadas: {self.checkboxFrame1.get()}")
         #mtg_descargar_cartas.callback()
+        
+    #def load_deck(self):
+    #    try:
+    #        self.btn_load_deck.configure(True, state="disabled")
+    #        platform, id, lang, deckName = self.url_info.get_deck_data()
+#
+    #        #self.debugText.configure(text=f"Obteniendo cartas...\n\nPlataforma: {platform}\nID: {id}\nIdioma: {LANGUAGES.get(lang, "no se")}")
+#
+    #        #Usa thread para no colapsar el codigo        
+    #        threading.Thread(
+    #            target=self._thread_load_deck,
+    #            args=(platform, id, lang),
+    #            daemon=True # Si se cierra la app, el hilo hace kaput
+    #        ).start()
+#
+    #    except Exception as e:
+    #        self.btn_load_deck.configure(True, state="normal")
+    #        #self.debugText.configure(text=e)
+
+    def _thread_load_deck(self, platform, id, lang):
+        deck = mtg_descargar_cartas.load_deck(platform, id, True, lang)
+        
+        #Llama a la otra funcion al terminar todo
+        self.after(0, lambda: self._on_deck_loaded(deck))
+    
+    def _on_deck_loaded(self, deck):
+        self.deck = deck
+        #self.btn_load_deck.configure(True, state="normal")
+        #self.debugText.configure(text=f"Cartas obtenidas: {len(self.deck)}")
 
 LANGUAGES = {
     "orig":"Original (Mejor calidad)",
@@ -224,5 +286,3 @@ LANGUAGES = {
 }
 
 
-app = App()
-app.mainloop()

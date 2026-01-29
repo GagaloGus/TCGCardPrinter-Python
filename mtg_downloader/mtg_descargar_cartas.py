@@ -123,6 +123,35 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
     return sorted(cards, key=lambda c: c.cardTypes[0].value)
 
 # ------------------------------------------------------------
+# Descargar mazo
+# ------------------------------------------------------------
+def download_deck(cards:list[CardClass], path:str = ""):
+    with Progress(
+        TextColumn("[bold]Descargando cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
+    ) as progress:
+        task = progress.add_task("", total=len(cards))
+        path = path.strip()
+        
+        if path == "":
+            path = OUTPUT_DIR
+        
+        print(path)
+        
+        def download_card(card:CardClass):
+            global N_ERROR_DOWNLOADS
+            try:
+                card.downloadImages(path)
+            except Exception as e:
+                N_ERROR_DOWNLOADS += 1
+                print(f"\033[31m[!]\033[0m Error descargando {card.cardMainName}: {e}")     
+                
+        with ThreadPoolExecutor(max_workers=20) as executor:
+           futures = [executor.submit(download_card, c) for c in cards]
+           for future in as_completed(futures):
+               progress.update(task, advance=1)
+
+
+# ------------------------------------------------------------
 # Script principal
 # ------------------------------------------------------------
 def main():
@@ -165,23 +194,7 @@ def main():
     print("")
     
     # Descargar imágenes en paralelo
-    with Progress(
-        TextColumn("[bold]Descargando cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
-    ) as progress:
-        task = progress.add_task("", total=len(cards))
-        
-        def download_card(card:CardClass):
-            global N_ERROR_DOWNLOADS
-            try:
-                card.downloadImages(OUTPUT_DIR)
-            except Exception as e:
-                N_ERROR_DOWNLOADS += 1
-                print(f"\033[31m[!]\033[0m Error descargando {card.cardMainName}: {e}")
-
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = [executor.submit(download_card, c) for c in cards]
-            for future in as_completed(futures):
-                progress.update(task, advance=1)
+    download_deck(cards)
 
     print(f"\n\033[32mListo mi rey, todas las cartas estan en '{OUTPUT_DIR}'\033[0m")
     if N_ERROR_DOWNLOADS + N_ERROR_LOAD > 0:
