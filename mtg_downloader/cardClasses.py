@@ -14,7 +14,11 @@ SCRYFALL_URL_CACHE = {}          # cache por URL / Guarda el JSON entero de Scry
 ORACLE_URL_CACHE = {}           # cache por oracle_id + lang / Guarda el JSON por Oracle ID + Idiom
 CACHE_LIFETIME_SEC = 24 * 60 * 60 # Un dia
 MAX_REQ_PER_SEC = 5
-print("el guevo mio")
+
+#Doble cara necesaria: transform, modal_dfc
+#Doble cara innecesaria: reversible
+#Solo una cara: (el resto)
+DOUBLE_LAYOUTS = ["transform, modal_dfc"]
 
 
 class CardType(Enum):
@@ -254,7 +258,7 @@ class CardClass:
                  
         # ---------- PARSEO DE DATOS ----------   
         self.layout = _get_card_layout(self.jsonData)
-        self.oracle_id = _get_card_oracle_id(self.jsonData, self.layout)
+        self.oracle_id = _get_card_oracle_id(self.jsonData)
         self._parse_card_data()
         self.cardTypes = self._get_cardType()
         self.quantity = 1 if CardType.TOKEN in self.cardTypes else self.quantity #Cambia la cantidad a 1 si es un token
@@ -280,28 +284,47 @@ class CardClass:
             
     def _parse_card_data(self):
         self.altLang = "printed_name" in self.jsonData
-        # Carta con otra carta por atras
-        if self.layout != "single":
-            name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"])
-            # misma carta por ambas caras, diferente arte
-            if self.layout == "reversible":
-                self.cardMainName = name1
-                self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
-            
-            # dos cartas diferentes
-            else:
-                name2 = str(self.jsonData["card_faces"][1]["printed_name" if self.altLang else "name"])
-                self.cardMainName = f"{name1} // {name2}"
-                self.cardTypeText += self.jsonData["type_line"].split("//") 
-        
-        # Cartas unicas
-        else:
-            self.cardTypeText.append(self.jsonData["type_line"])
+
+        if self.layout == "single":
             self.cardMainName = self.jsonData["printed_name" if self.altLang else "name"]
+            self.cardNames = [self.cardMainName]
+            self.cardTypeText.append(self.jsonData["type_line"])
+        elif self.layout == "reversible":
+            self.cardMainName = self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"]
+            self.cardNames = [self.cardMainName]
+            self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
+        else:
+            name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"])
+            name2 = str(self.jsonData["card_faces"][1]["printed_name" if self.altLang else "name"])
+            self.cardMainName = f"{name1} // {name2}"
+            self.cardNames = [name1, name2]
+            self.cardTypeText += self.jsonData["type_line"].split("//") 
+
+
             
-        # Divide el nombre de la carta si contiene un "//"
-        self.cardMainName = str(self.cardMainName).strip()
-        self.cardNames = [n.strip() for n in self.cardMainName.split("//")] #Limpia los espacios del principio y fin de cada elemento de la lista
+
+        ## Carta con otra carta por atras
+        #if self.layout != "single":
+        #    name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"])
+        #    # misma carta por ambas caras, diferente arte
+        #    if self.layout == "reversible":
+        #        self.cardMainName = name1
+        #        self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
+        #    
+        #    # dos cartas diferentes
+        #    else:
+        #        name2 = str(self.jsonData["card_faces"][1]["printed_name" if self.altLang else "name"])
+        #        self.cardMainName = f"{name1} // {name2}"
+        #        self.cardTypeText += self.jsonData["type_line"].split("//") 
+        #
+        ## Cartas unicas
+        #else:
+        #    self.cardTypeText.append(self.jsonData["type_line"])
+        #    self.cardMainName = self.jsonData["printed_name" if self.altLang else "name"]
+        #    
+        ## Divide el nombre de la carta si contiene un "//"
+        #self.cardMainName = str(self.cardMainName).strip()
+        #self.cardNames = [n.strip() for n in self.cardMainName.split("//")] #Limpia los espacios del principio y fin de cada elemento de la lista
     
 
      
@@ -355,30 +378,20 @@ class CardClass:
     def __str__(self):
         return f"{self.cardMainName} (Idioma original: {self.altLang}) ({self.quantity}) -> {self.scryfall_url}"
     
-def _get_card_layout(jsonData) -> str:            
-    # Carta con otra carta por atras
-    if "card_faces" in jsonData:
-        name1 = str(jsonData["card_faces"][0]["name"])
-        name2 = str(jsonData["card_faces"][1]["name"])
-        #misma carta por ambas caras, diferente arte
-        if name1 == name2:
-            return "reversible"
-        # dos cartas diferentes
-        else:
-            return "double"
-    # Cartas unicas
+def _get_card_layout(jsonData) -> str:        
+    if jsonData["layout"] in DOUBLE_LAYOUTS:
+        return "double"
+    elif jsonData["layout"] == "reversible_card":
+        return "reversible"
     else:
         return "single"    
         
-def _get_card_oracle_id(jsonData, layout="") -> str:
-    if layout == "":
-        layout = _get_card_layout(jsonData)
-    
-    if layout == "reversible":
-        oracle_id = jsonData["card_faces"][0]["oracle_id"]
-    else:
+def _get_card_oracle_id(jsonData) -> str:   
+    try:
         oracle_id = jsonData["oracle_id"]   
-    return oracle_id 
-
+    except:
+        oracle_id = jsonData["card_faces"][0]["oracle_id"]
+    
+    return oracle_id
 if __name__ == "__main__":
     pass
