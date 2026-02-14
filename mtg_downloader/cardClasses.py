@@ -12,13 +12,13 @@ from scraper import scrape_json as url_scraper
 # ---------------- CACHE GLOBAL ----------------
 SCRYFALL_URL_CACHE = {}          # cache por URL / Guarda el JSON entero de Scryfall para cada url
 ORACLE_URL_CACHE = {}           # cache por oracle_id + lang / Guarda el JSON por Oracle ID + Idiom
-CACHE_LIFETIME_SEC = 24 * 60 * 60 # Un dia
+CACHE_LIFETIME_SEC = 3 * 24 * 60 * 60 # Tres dias
 MAX_REQ_PER_SEC = 5
 
 #Doble cara necesaria: transform, modal_dfc
 #Doble cara innecesaria: reversible
 #Solo una cara: (el resto)
-DOUBLE_LAYOUTS = ["transform, modal_dfc"]
+DOUBLE_LAYOUTS = ["transform", "modal_dfc"]
 
 
 class CardType(Enum):
@@ -40,6 +40,7 @@ class CardType(Enum):
     SORCERY = 15
     TOKEN = 16
     VANGUARD = 17
+    COMMANDER = 18
     OTHER = 99
     
     def __str__(self, lang:str = "orig") -> str:
@@ -65,6 +66,7 @@ class CardType(Enum):
                     CardType.SORCERY: "Conjuro",
                     CardType.TOKEN: "Ficha",
                     CardType.VANGUARD: "Vanguardia",
+                    CardType.COMMANDER: "Commader",
                     CardType.OTHER: "Otro",
                 }
             #Si pusieron otro idioma no reconocido, pone el original
@@ -156,7 +158,6 @@ class CardScraper:
             #-- Scrapea para otro idioma usando oracle_id
             oracle_url_pairs = {}
             oracle_url_json_pairs = []
-            oracle_fallback_url_pairs = {}
 
             #-- Filtra por si ya hay algo en cache de oracle
             print("\033[33minicio filtrado de oracle_id\033[0m\033[0m")
@@ -241,12 +242,13 @@ class CardScraper:
             print(f"no se pudo obtener la cache de oracle // {e}")
 
 class CardClass:
-    def __init__(self, jsonData, quantity:int, lang:str, scryfall_url:str):       
+    def __init__(self, jsonData, quantity:int, lang:str, scryfall_url:str, isCommander:bool):       
         self.jsonData = jsonData
         self.quantity = quantity
         self.scryfall_url = scryfall_url
         self.lang = lang
         self.altLang = False
+        self.isCommander = isCommander
         
         self.oracle_id = ""
         self.layout = ""
@@ -299,35 +301,7 @@ class CardClass:
             self.cardMainName = f"{name1} // {name2}"
             self.cardNames = [name1, name2]
             self.cardTypeText += self.jsonData["type_line"].split("//") 
-
-
-            
-
-        ## Carta con otra carta por atras
-        #if self.layout != "single":
-        #    name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"])
-        #    # misma carta por ambas caras, diferente arte
-        #    if self.layout == "reversible":
-        #        self.cardMainName = name1
-        #        self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
-        #    
-        #    # dos cartas diferentes
-        #    else:
-        #        name2 = str(self.jsonData["card_faces"][1]["printed_name" if self.altLang else "name"])
-        #        self.cardMainName = f"{name1} // {name2}"
-        #        self.cardTypeText += self.jsonData["type_line"].split("//") 
-        #
-        ## Cartas unicas
-        #else:
-        #    self.cardTypeText.append(self.jsonData["type_line"])
-        #    self.cardMainName = self.jsonData["printed_name" if self.altLang else "name"]
-        #    
-        ## Divide el nombre de la carta si contiene un "//"
-        #self.cardMainName = str(self.cardMainName).strip()
-        #self.cardNames = [n.strip() for n in self.cardMainName.split("//")] #Limpia los espacios del principio y fin de cada elemento de la lista
-    
-
-     
+  
     def showImage(self) -> list:
         imgs = []
         for i in range(len(self.cardNames)):
@@ -355,30 +329,34 @@ class CardClass:
                 
     def _get_cardType(self) -> list[CardType]:
         allTypes = []
-        preference = [CardType.TOKEN, CardType.CREATURE]
-        for ty in CardType:
-            if ty not in preference:
-                preference.append(ty)   
+        if self.isCommander:
+            for t in self.cardTypeText:
+                allTypes.append(CardType.COMMANDER)
+        else: 
+            preference = [CardType.TOKEN, CardType.CREATURE, CardType.PLANESWALKER]
+            for ty in CardType: #Añade el resto de tipos detras del resto
+                if ty not in preference:
+                    preference.append(ty)   
 
-        for t in self.cardTypeText:
-            text_type = t.lower()
-            found_type = False
-            for ty in preference:
-                card_type = ty.name.lower()
-                if card_type in text_type:
-                    allTypes.append(ty)
-                    found_type = True
-                    break
-                
-            if not found_type:
-                allTypes.append(CardType.OTHER)
+            for t in self.cardTypeText:
+                text_type = t.lower()
+                found_type = False
+                for ty in preference: #Criba por cada tipo 
+                    card_type = ty.name.lower()
+                    if card_type in text_type:
+                        allTypes.append(ty)
+                        found_type = True
+                        break
+                    
+                if not found_type:
+                    allTypes.append(CardType.OTHER)
                 
         return allTypes               
     
     def __str__(self):
         return f"{self.cardMainName} (Idioma original: {self.altLang}) ({self.quantity}) -> {self.scryfall_url}"
     
-def _get_card_layout(jsonData) -> str:        
+def _get_card_layout(jsonData) -> str: 
     if jsonData["layout"] in DOUBLE_LAYOUTS:
         return "double"
     elif jsonData["layout"] == "reversible_card":

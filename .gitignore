@@ -12,6 +12,7 @@ cartas/
 cartas_imprimir/
 pdf/
 
+
 # Distribution / packaging
 .Python
 build/
@@ -185,3 +186,4 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+

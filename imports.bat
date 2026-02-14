@@ -20,7 +20,7 @@ pip install cloudscraper --no-warn-script-location
 echo.
 pip install pikepdf --no-warn-script-location
 echo.
-pip install rich --no-warn-script-location
+pip install --upgrade rich --no-warn-script-location
 echo.
 pip install customtkinter --no-warn-script-location
 echo.

@@ -1,4 +1,4 @@
-import sys, os, re, requests, cloudscraper, subprocess, time
+import sys, os, re, requests, cloudscraper, subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 
@@ -65,7 +65,7 @@ def get_download_length(platform: str, deck_id: str, prnt_tokens: bool) -> int:
                     all_cards[c["card"]["scryfall_id"]] = c
         if prnt_tokens and "tokens" in data:
             for t in data["tokens"]:
-                if t.get("layout") == "token": 
+                if t.get("layout") in ["token", "emblem"]: 
                     all_cards[t["scryfall_id"]] = t
         count = len(all_cards)
     return count
@@ -76,45 +76,47 @@ def get_download_length(platform: str, deck_id: str, prnt_tokens: bool) -> int:
 def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list[CardClass]:
     global N_ERROR_LOAD
     data = get_json(platform, deck_id)
-    card_url_qty_pair = {}
-
+    deck_data = {}
+    
     if platform == "archidekt":
         skip = ["Maybeboard"] + ([] if prnt_tokens else ["Token"])
         for c in data["cards"]:
+            isCommander = "Commander" in c["categories"]
             card_types = list(c["categories"]) + list(c["card"]["oracleCard"]["types"])
             if any(x in card_types for x in skip): 
                 continue
             quantity = c["quantity"] if "Token" not in card_types else 1
             edition, number = c["card"]["edition"]["editioncode"], c["card"]["collectorNumber"]
             url = f"https://api.scryfall.com/cards/{edition}/{number}"
-            card_url_qty_pair[url] = quantity
+            deck_data[url] = (quantity, isCommander)
     else:  # moxfield
         all_cards = []
         for sec in ["mainboard","commanders","companions","signatureSpells"]:
             if sec in data: 
                 all_cards.extend(data[sec].values())
         if prnt_tokens and "tokens" in data:
-            all_cards.extend([t for t in data["tokens"] if t.get("layout")=="token"])
+            all_cards.extend([t for t in data["tokens"] if t.get("layout") in ["token", "emblem"]])
         for c in all_cards:
+            isCommander = c.get("boardType", "mainboard") == "commanders"
             card_data = c.get("card", c)
             quantity = c.get("quantity", 1)
             url = f"https://api.scryfall.com/cards/{card_data['scryfall_id']}"
-            card_url_qty_pair[url] = quantity
+            deck_data[url] = (quantity, isCommander)
 
     cards = []
     
     with Progress(
         TextColumn("[bold]Obteniendo cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
     ) as progress:
-        task = progress.add_task("", total=len(card_url_qty_pair))
+        task = progress.add_task("", total=len(deck_data))
         
         # le carga todas las urls
-        cardScraper = CardScraper(list(card_url_qty_pair.keys()), lang)
+        cardScraper = CardScraper(list(deck_data.keys()), lang)
         cardScraper.run()
         
         for (url, json, scry_url) in cardScraper.finishedJsons:
-            quantity = card_url_qty_pair.get(scry_url, 1) #Default 1 por si acaso
-            card = CardClass(json, quantity, lang, url)
+            quantity, isCommander = deck_data.get(scry_url, (1, False)) #Default por si acaso
+            card = CardClass(json, quantity, lang, url, isCommander)
             cards.append(card)
             
             progress.update(task, advance=1)
@@ -149,7 +151,6 @@ def download_deck(cards:list[CardClass], path:str = ""):
            futures = [executor.submit(download_card, c) for c in cards]
            for future in as_completed(futures):
                progress.update(task, advance=1)
-
 
 # ------------------------------------------------------------
 # Script principal
@@ -207,8 +208,8 @@ def main():
             modulo_imprimir.main(OUTPUT_DIR, "1")
         else:
             subprocess.Popen(rf'explorer /select,"{OUTPUT_DIR}"')
-    except:
-        print("\033[31m[!]\033[0m No se pudo abrir el modulo de impresion.\n -> Pasa las imagenes a la carpeta: 'cartas_imprimir' y ejecuta el otro programa")
+    except Exception as e:
+        print(f"\033[31m[!]\033[0m No se pudo abrir el modulo de impresion.\n -> Pasa las imagenes a la carpeta: 'cartas_imprimir' y ejecuta el otro programa\n{e}")
         subprocess.Popen(rf'explorer /select,"{OUTPUT_DIR}"')
 
 if __name__ == "__main__":

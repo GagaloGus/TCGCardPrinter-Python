@@ -1,0 +1,2 @@
+python -m PyInstaller --noconfirm --onefile --console --hidden-import "rich._unicode_data" --hidden-import "rich._unicode_data.unicode17-0-0"  "F:\cartita\CardPrinter-Python\mtg_downloader\mtg_descargar_cartas.py"
+python -m PyInstaller --noconfirm --onefile --console --hidden-import "rich._unicode_data" --hidden-import "rich._unicode_data.unicode17-0-0"  "F:\cartita\CardPrinter-Python\imprimir_cartas.py"

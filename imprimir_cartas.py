@@ -27,6 +27,9 @@ card_margin = 0
 x_start = 0
 y_start = 0
 
+def debug():
+    print("Modulo imprimir_cartas funciona!")
+
 def comprimir_imagen(path, max_width_px=744, quality=85):
     img = Image.open(path).convert("RGB")
 
@@ -110,8 +113,8 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     deckName = basicFunctions.crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m"))
     DECK_DIR = os.path.join(OUTPUT_DIR, deckName)
 
-    PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_front.pdf")
-    PDF_BACK = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_back.pdf")
+    PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if deckName == '' else deckName}_front.pdf")
+    PDF_BACK = os.path.join(DECK_DIR, f"{'deck' if deckName == '' else deckName}_back.pdf")
     BACK_IMAGE = os.path.join('cartas_imprimir', BACK_NAME)
     os.makedirs(DECK_DIR, exist_ok=True)
     

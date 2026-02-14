@@ -1,4 +1,3 @@
-from typing import Tuple
 import customtkinter as gui
 from tkinter import filedialog
 import os, threading
