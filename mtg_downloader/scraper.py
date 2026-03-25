@@ -1,4 +1,3 @@
-import asyncio
 import httpx
 import time
 from functools import partial
@@ -24,7 +23,7 @@ async def scrape_json(urls : list, result, max_per_sec : int):
         await aiometer.run_on_each(
             scrape,
             urls,
-            max_per_second=max_per_sec,
+            max_per_second=max_per_sec
         )
 
     print(f"finished {len(urls)} requests in {time.time() - start:.2f} seconds")

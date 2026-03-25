@@ -9,7 +9,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from PIL import Image
-import basicFunctions
+import basic_functions
 
 EXTENSIONS_ALLOWED = [".png", ".jpg", ".jpeg", ".jfif", ".tiff", ".webp"]
 INPUT_DIR = "cartas_imprimir"
@@ -75,7 +75,7 @@ def comprimir_pdf(input_pdf: str, output_pdf: str):
         pdf = pikepdf.open(input_pdf)
         pdf.save(output_pdf, compress_streams=True)
         pdf.close()
-        basicFunctions.borrar_ultimas_lineas(0)
+        basic_functions.borrar_ultimas_lineas(0)
         os.remove(input_pdf)
     except Exception as e:
         print(f"\033[31mError comprimiendo PDF {input_pdf}: {e}\033[0m")
@@ -83,14 +83,14 @@ def comprimir_pdf(input_pdf: str, output_pdf: str):
 
 def main(customInputDir = "", customTipoCarta = "-1"):
     global cols, rows, card_w, card_h, card_margin, x_start, y_start, INPUT_DIR
-    
+
     print(f"\033[33m==================== CREAR IMPRIMIBLE DE CARTAS ====================")
     print(f"Extensiones de imagen admitidas: \033[0m{EXTENSIONS_ALLOWED}\n")
-    
+
     #Se cambia el directorio de input por si se llama desde otro script
     if customInputDir != "":
         INPUT_DIR = customInputDir
-    
+
     os.makedirs(INPUT_DIR, exist_ok=True)
 
     # Buscar imágenes
@@ -99,40 +99,40 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         for ext in EXTENSIONS_ALLOWED:
             if ext in f:
                 images.append(f)
-                  
+
     if not images:
         print(f"\033[33mNo se encontraron imágenes en la carpeta '{INPUT_DIR}'\033[0m")
         os.system("pause")
         os._exit(0)
-        
+
     print(f"\033[0mSe encontraron \033[36m{len(images)}\033[0m imágenes para imprimir.")
-    
-    deckName = basicFunctions.crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m"))
+
+    deckName = basic_functions.crear_directorio_nuevo(input("Quieres poner algun nombre a la carpeta? (Enter para no): \033[36m"))
     DECK_DIR = os.path.join(OUTPUT_DIR, deckName)
 
     PDF_FRONT = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_front.pdf")
     PDF_BACK = os.path.join(DECK_DIR, f"{'deck' if deckName == "" else deckName}_back.pdf")
     BACK_IMAGE = os.path.join('cartas_imprimir', BACK_NAME)
     os.makedirs(DECK_DIR, exist_ok=True)
-    
+
     # Configuracion del layout
     magicDim = (63, 88)
     yugiDim = (59, 86)
     pokerDim = (63.5, 88.9)
     tipo_carta = 0
-    
+
     #Tipo de carta custom por si se llama desde otro script
     customTipoCarta = int(customTipoCarta)
     if customTipoCarta != -1 and customTipoCarta in [1, 2, 3, 4]:
         tipo_carta = customTipoCarta
     else:
         print()
-        tipo_carta = basicFunctions.multiple_CustomChoice(
+        tipo_carta = basic_functions.multiple_custom_choice(
             "Que dimensiones de carta quieres:",
             [f"Magic The Gathering ({magicDim[0]}mm x {magicDim[1]}mm)", f"Yugioh ({yugiDim[0]}mm x {yugiDim[1]}mm)", f"Carta normal ({pokerDim[0]}mm x {pokerDim[1]}mm)", "Otro"],
-            ["-- Magic --", "-- YuGiOh --", "-- Carta normal --", "-- Custom --"]    
+            ["-- Magic --", "-- YuGiOh --", "-- Carta normal --", "-- Custom --"]
         )
-    
+
     if tipo_carta == 0: #magic
         card_w, card_h = magicDim[0]*mm, magicDim[1]*mm
     elif tipo_carta == 1: #yugi
@@ -142,16 +142,16 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     else: #custom
         card_w = float(input("\033[33m  Anchura en milimetros: \033[36m"))*mm
         card_h = float(input("\033[33m  Altura en milimetros: \033[36m"))*mm
-    
+
     print("\033[0m")
-    
+
     # Configuracion del margen
-    has_margin = basicFunctions.yesNo_CustomChoice("¿Quieres que haya margen entre las cartas?", "si", "no")
-    basicFunctions.borrar_ultimas_lineas(0)
+    has_margin = basic_functions.yesNo_custom_choice("¿Quieres que haya margen entre las cartas?", "si", "no")
+    basic_functions.borrar_ultimas_lineas(0)
     print(f"\033[33m-- {'Con' if has_margin else 'Sin'} Margen --\033[0m")
-    
-    card_margin = 5*mm if has_margin else 0.3*mm       
-    
+
+    card_margin = 5*mm if has_margin else 0.3*mm
+
     # Calcula cuantas cartas caben en horizontal y vertical
     cols = int(page_width // (card_w + card_margin))
     rows = int(page_height // (card_h + card_margin))
@@ -169,7 +169,7 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     c = canvas.Canvas(tempPDFName, pagesize=A4)
     x, y = x_start, y_start
     count = 0
-    
+
     dibujar_guias_pagina(c)
     print("")
 
@@ -177,14 +177,14 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         TextColumn("[bold]Generando PDF..."), BarColumn(), TextColumn("[bold]{task.completed} / {task.total}"), TimeRemainingColumn()
         ) as p:
         task = p.add_task("", total=len(images))
-        
+
         for i in range(len(images)):
-            
+
             img_name = images[i]
             # Se salta la imagen del dorso para evitar impresion innecesaria
             if(img_name == BACK_NAME):
                 continue
-            
+
             img_path = os.path.join(INPUT_DIR, img_name)
             img = comprimir_imagen(img_path)
 
@@ -199,14 +199,14 @@ def main(customInputDir = "", customTipoCarta = "-1"):
                 c.showPage()
                 dibujar_guias_pagina(c)
                 x, y = x_start, y_start
-                
+
             p.update(task, advance=1)
 
     c.save()
     print()
     comprimir_pdf(tempPDFName, PDF_FRONT)
     print(f"\033[32mPDF de cartas generado: \033[0m{PDF_FRONT}")
-    
+
     # Crear PDF del dorso
     if os.path.exists(BACK_IMAGE):
         tempPDFName = PDF_BACK.replace(".pdf", "_temp.pdf")
@@ -226,18 +226,16 @@ def main(customInputDir = "", customTipoCarta = "-1"):
         print(f"\033[32mPDF de dorsos generado: \033[0m{PDF_BACK}")
     else:
         print(f"\033[33mNo encontré '{BACK_IMAGE}'\033[0m")
-        
+
     subprocess.Popen(rf'explorer /select,"{PDF_FRONT}"')
     os.system("pause")
     os._exit(0)
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     os.system("cls")
-    
+
     # Modifica si se ha llamado desde otro script con otros parametros
     if len(sys.argv) > 1:
         main(sys.argv[1], sys.argv[2])
     else:
         main()
-    
-    

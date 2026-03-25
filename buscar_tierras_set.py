@@ -13,8 +13,8 @@ def borrar_ultimas_lineas(num_lineas:int):
     sys.stdout.write("\033[F" * num_lineas)  # Mueve el cursor arriba
     sys.stdout.write("\033[K" * num_lineas)  # Borra las líneas
     sys.stdout.flush()
-    
-def yesNo_CustomChoice(text:str, trueOption:str = "si", falseOption:str = "no") -> bool:
+
+def yesNo_custom_choice(text:str, trueOption:str = "si", falseOption:str = "no") -> bool:
     value = False
     while True:
         __inp = input(f"{text} [{trueOption}/{falseOption}]: \033[36m").lower()
@@ -33,14 +33,14 @@ def get_image_url(setID:str, cardID:int) -> str:
     cardName = data["name"]
     if cardName not in LAND_TYPES:
         raise ValueError(f"La carta no es una tierra! -> {cardName}")
-    
+
     img_url = data["image_uris"]["border_crop"]
     print(f"{cardName} ({setID}/{cardID}) -> {img_url}")
     return img_url
 
 def main_program():
     global URLS
-    
+
     setID = input("\n\033[0m¿Cual es el set de la carta? (scryfall.com/card/\033[33mbfz\033[0m/268/mountain): \033[36m").strip()
     cardID = int(input("\033[0m¿Cual es el ID de la carta dentro del set? (scryfall.com/card/bfz/\033[33m268\033[0m/mountain): \033[36m").strip())
 
@@ -49,10 +49,10 @@ def main_program():
         cardName = data["name"]
         if cardName not in LAND_TYPES:
             raise ValueError(f"La carta no es una tierra! -> {cardName}")
-        
+
         #Itera hacia arriba
         print("")
-        i = cardID 
+        i = cardID
         while True:
             try:
                 newUrl = get_image_url(setID, i)
@@ -75,7 +75,7 @@ def main_program():
         print(f"\033[32m{e}\033[0m")
 
     print(f"\n\033[0mSe encontraron \033[36m{len(URLS)}\033[0m urls de tierras")
-    abrir_navegador = yesNo_CustomChoice("¿Quieres abrirlas en el navegador?")
+    abrir_navegador = yesNo_custom_choice("¿Quieres abrirlas en el navegador?")
 
     if abrir_navegador:
             print("\033[33m -- ABRIENDO URLS... --")
@@ -87,10 +87,10 @@ if __name__ == "__main__":
     os.system("cls")
     print(f"\033[33m======= OBTENER SET DE TIERRAS CUSTOM DE SCRYFALL =======")
     main_program()
-    
+
     while True:
         print("")
-        otra_vez = yesNo_CustomChoice("¿Quieres buscar mas tierras?")
+        otra_vez = yesNo_custom_choice("¿Quieres buscar mas tierras?")
         if(otra_vez):
             print(f"\n\033[33m==============================================================\\033[0m")
             main_program()

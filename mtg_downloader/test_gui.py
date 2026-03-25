@@ -26,24 +26,24 @@ class MyCheckboxFrame(gui.CTkFrame):
         super().__init__(master)
         self.grid_columnconfigure(0, weight=1)
         #self.grid_rowconfigure(tuple(range(len(values))), weight=1)
-        
+
         startCol = 0
         self.values = values
         self.checkboxes = []
-        
+
         # Añade un titulo si se puso uno en los parametros
         if title != "":
             self.title = gui.CTkLabel(self, text=title, fg_color="gray30", corner_radius=6)
             self.title.grid(row= 0, column = 0, padx = 10, pady = (10,0), sticky="we")
             startCol += 1
-        
+
         # Crea las checkboxes
         for i, value in enumerate(values):
-            padY = (10, 0) if i < len(values)-1 else 10       
+            padY = (10, 0) if i < len(values)-1 else 10
             c = gui.CTkCheckBox(self, text=value)
             c.grid(row= i+startCol, column = 0, padx = 10, pady = padY, sticky="w")
             self.checkboxes.append(c)
-        
+
     def get(self):
         # Añade a la lista el texto de las checkboxes que estan marcadas
         checked = []
@@ -56,28 +56,28 @@ class MyRadioButtonFrame(gui.CTkFrame):
     def __init__(self, master, values:list[str], title = ""):
         super().__init__(master)
         self.grid_columnconfigure(0, weight=1)
-        
+
         startCol = 0
         self.values = values
         self.radioButtons = []
         self.variable = gui.StringVar(value="")
-        
+
         # Añade un titulo si se puso uno en los parametros
         if title != "":
             self.title = gui.CTkLabel(self, text=title, fg_color="gray30", corner_radius=6)
             self.title.grid(row= 0, column = 0, padx = 10, pady = (10,0), sticky="we")
             startCol += 1
-        
+
         # Crea los botons
         for i, value in enumerate(values):
-            padY = (10, 0) if i < len(values)-1 else 10       
+            padY = (10, 0) if i < len(values)-1 else 10
             c = gui.CTkRadioButton(self, text=value, value=value, variable=self.variable)
             c.grid(row= i+startCol, column = 0, padx = 10, pady = padY, sticky="w")
             self.radioButtons.append(c)
-        
+
     def get(self):
         return self.variable.get()
-    
+
     def set(self, value):
         self.variable.set(value)
 
@@ -85,54 +85,54 @@ class CardShowcaseFrame(gui.CTkFrame):
     def __init__(self, master, platform:str, deck_id:str):
         super().__init__(master)
         self.grid_columnconfigure((0,1), weight=1)
-        
+
         self.cards = mtg_descargar_cartas.load_deck(platform, deck_id, False, "orig")
         self.card_index = 0
-        
+
         self.card_imgs = []
         for c in self.cards:
             self.card_imgs.append(c.showImage()[0])
 
-        self.label_name = gui.CTkLabel(self, text=f"{self.cards[0].cardNames[0]}")
+        self.label_name = gui.CTkLabel(self, text=f"{self.cards[0].card_names[0]}")
         self.label_name.grid(row= 0, column = 0, padx = 10, pady = 10, sticky="we", columnspan=2)
 
         # Carga la primera imagen de la lista
-        self.img = gui.CTkImage(self.card_imgs[0], size=get_mtg_dims(3))     
+        self.img = gui.CTkImage(self.card_imgs[0], size=get_mtg_dims(3))
         self.img_label = gui.CTkLabel(self, text="", image=self.img)
         self.img_label.grid(row= 1, column = 0, padx = 10, pady = 10, sticky="we", columnspan=2)
-        
+
         self.cardCounter = gui.CTkLabel(self, text=f"1 / {len(self.cards)}")
-        self.cardCounter.grid(row= 2, column = 0, padx = 10, pady = 0, sticky="we", columnspan=2)  
-        
+        self.cardCounter.grid(row= 2, column = 0, padx = 10, pady = 0, sticky="we", columnspan=2)
+
         self.btn_prev = gui.CTkButton(self, text="<", command=self.prev_card, font=("Arial", 20, "bold"))
-        self.btn_prev.grid(row= 3, column = 0, padx = 10, pady = 10, sticky="we")  
-        
+        self.btn_prev.grid(row= 3, column = 0, padx = 10, pady = 10, sticky="we")
+
         self.btn_next = gui.CTkButton(self, text=">", command=self.next_card, font=("Arial", 20, "bold"))
-        self.btn_next.grid(row= 3, column = 1, padx = 10, pady = 10, sticky="we")  
-    
+        self.btn_next.grid(row= 3, column = 1, padx = 10, pady = 10, sticky="we")
+
     def change_image(self):
 
-        self.label_name.configure(text=f"{self.cards[self.card_index].cardNames[0]}")
+        self.label_name.configure(text=f"{self.cards[self.card_index].card_names[0]}")
 
         img = self.card_imgs[self.card_index]
         self.img = gui.CTkImage(img, size=get_mtg_dims(3))
-          
+
         self.img_label.configure(image=self.img)
         self.cardCounter.configure(text=f"{self.card_index+1} / {len(self.cards)}")
-        
+
     def next_card(self):
         if self.card_index >= len(self.cards)-1:
             self.card_index = 0
         else:
-            self.card_index += 1  
+            self.card_index += 1
         self.change_image()
-    
+
     def prev_card(self):
         if self.card_index == 0:
             self.card_index = len(self.cards)-1
         else:
             self.card_index -= 1
-        self.change_image()  
+        self.change_image()
 
 class LanguageChooseFrame(gui.CTkFrame):
     def __init__(self, master, values:dict):
@@ -145,17 +145,17 @@ class LanguageChooseFrame(gui.CTkFrame):
         self.radioVar = gui.StringVar(value="lang")
 
         for i, (key, val) in enumerate(values.items()):
-            padY = (10, 0) if i < len(values)-1 else 10 
+            padY = (10, 0) if i < len(values)-1 else 10
             c = gui.CTkRadioButton(self, text=val, value=key, variable=self.radioVar)
             c.grid(row= i+startCol, column = 0, padx = 10, pady = padY, sticky="w")
             self.radioButtons.append(c)
 
     def get(self):
         return self.radioVar.get()
-    
+
     def set(self, value):
         self.radioVar.set(value)
-        
+
 class DeckLoaderFrame(gui.CTkFrame):
     def __init__(self, master):
         super().__init__(master)
@@ -173,8 +173,8 @@ class DeckLoaderFrame(gui.CTkFrame):
         self.btn_search.grid(row= 2, column = 0, padx = 10, pady = (10, 0), sticky="nswe")
 
         self.debugText = gui.CTkLabel(self, text=f"aloooo")
-        self.debugText.grid(row= 3, column = 0, padx = 10, pady = (5, 0), sticky="w")  
-    
+        self.debugText.grid(row= 3, column = 0, padx = 10, pady = (5, 0), sticky="w")
+
     def buscar_mazo(self):
         self.debugText.configure(text=f"Obteniendo cartas...")
         url = self.input_url.get()
@@ -203,16 +203,16 @@ class App(gui.CTk):
 
         self.checkboxFrame1 = MyCheckboxFrame(self, values=["pito", "pete", "puta", "pato"], title="Check")
         self.checkboxFrame1.grid(row= 1, column = 2, padx = 10, pady = (10, 0), sticky="nswe", rowspan=2)
-        
+
         self.cardFrame = CardShowcaseFrame(self, "moxfield", "rFMAHnn5EkCVWCtNJQ7CkA")
         self.cardFrame.grid(row= 1, column = 1, padx = 10, pady = (10, 0), sticky="nswe", rowspan=2)
-        
-         
+
+
         self.btn = gui.CTkButton(self, text="Soy homero", command=self.btn_callback)
         self.btn.grid(row= 3, column = 0, padx = 20, pady = 20, sticky="we", columnspan=3)
 
-        
-        
+
+
     def btn_callback(self):
         print(f"Checkboxes marcadas: {self.checkboxFrame1.get()}")
         #mtg_descargar_cartas.callback()

@@ -1,11 +1,20 @@
-import sys, os, re, requests, cloudscraper, subprocess, time
+# stdlib
+import sys
+import os
+import re
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# third-party
+import requests
+import cloudscraper
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 
+# local
 # Añade el directorio de arriba para usar scripts fuera de la carpeta
 sys.path.insert(1, "/".join(os.path.realpath(__file__).split("/")[0:-2]))
-from basicFunctions import *
-from cardClasses import CardClass, CardType, CardScraper
+from basic_functions import borrar_ultimas_lineas, yesNo_custom_choice, multiple_custom_choice, crear_directorio_nuevo
+from mtg_downloader.card_classes import CardClass, CardScraper
 
 # ---------------- CONFIG ----------------
 # -- FILES --
@@ -32,13 +41,13 @@ def get_platform_and_id(url: str):
 def get_json(platform: str, deck_id: str):
     if platform == "archidekt":
         resp = requests.get(f"https://archidekt.com/api/decks/{deck_id}/")
-        if resp.status_code != 200: 
+        if resp.status_code != 200:
             raise ValueError(f"\033[31m[!]\033[0m Error API Archidekt {resp.status_code}")
         return resp.json()
     elif platform == "moxfield":
         scraper = cloudscraper.create_scraper()
         resp = scraper.get(f"https://api.moxfield.com/v2/decks/all/{deck_id}")
-        if resp.status_code != 200: 
+        if resp.status_code != 200:
             raise ValueError(f"\033[31m[!]\033[0m Error API Moxfield {resp.status_code}")
         return resp.json()
     else:
@@ -61,11 +70,11 @@ def get_download_length(platform: str, deck_id: str, prnt_tokens: bool) -> int:
         all_cards = {}
         for sec in ["mainboard","commanders","companions","signatureSpells"]:
             if sec in data:
-                for c in data[sec].values(): 
+                for c in data[sec].values():
                     all_cards[c["card"]["scryfall_id"]] = c
         if prnt_tokens and "tokens" in data:
             for t in data["tokens"]:
-                if t.get("layout") == "token": 
+                if t.get("layout") == "token":
                     all_cards[t["scryfall_id"]] = t
         count = len(all_cards)
     return count
@@ -82,7 +91,7 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
         skip = ["Maybeboard"] + ([] if prnt_tokens else ["Token"])
         for c in data["cards"]:
             card_types = list(c["categories"]) + list(c["card"]["oracleCard"]["types"])
-            if any(x in card_types for x in skip): 
+            if any(x in card_types for x in skip):
                 continue
             quantity = c["quantity"] if "Token" not in card_types else 1
             edition, number = c["card"]["edition"]["editioncode"], c["card"]["collectorNumber"]
@@ -91,7 +100,7 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
     else:  # moxfield
         all_cards = []
         for sec in ["mainboard","commanders","companions","signatureSpells"]:
-            if sec in data: 
+            if sec in data:
                 all_cards.extend(data[sec].values())
         if prnt_tokens and "tokens" in data:
             all_cards.extend([t for t in data["tokens"] if t.get("layout")=="token"])
@@ -102,21 +111,21 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
             card_url_qty_pair[url] = quantity
 
     cards = []
-    
+
     with Progress(
         TextColumn("[bold]Obteniendo cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
     ) as progress:
         task = progress.add_task("", total=len(card_url_qty_pair))
-        
+
         # le carga todas las urls
         cardScraper = CardScraper(list(card_url_qty_pair.keys()), lang)
         cardScraper.run()
-        
+
         for (url, json, scry_url) in cardScraper.finishedJsons:
             quantity = card_url_qty_pair.get(scry_url, 1) #Default 1 por si acaso
             card = CardClass(json, quantity, lang, url)
             cards.append(card)
-            
+
             progress.update(task, advance=1)
             #time.sleep(0.01)
 
@@ -128,7 +137,7 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
 def main():
     global OUTPUT_DIR, N_ERROR_DOWNLOADS, DOWNLOAD_LEN
     # ---------- SETUP
-    
+
     print("\033[33m======= DESCARGAR CARTAS MAGIC THE GATHERING =======\033[0m")
     print("- Plataformas admitidas: Archidekt, Moxfield\n")
 
@@ -146,10 +155,10 @@ def main():
     print(f"\033[33mPlataforma: \033[0m{platform.capitalize()}")
     print(f"\033[33mID del mazo: \033[0m'{deck_id}'")
 
-    prnt_tokens = yesNo_CustomChoice("¿Quieres cargar tambien los tokens?", "si", "no")
+    prnt_tokens = yesNo_custom_choice("¿Quieres cargar tambien los tokens?", "si", "no")
     borrar_ultimas_lineas(0)
     print(f"\033[33mTokens:\033[0m {'Si' if prnt_tokens else 'No'}")
-    card_lang = multiple_CustomChoice("Elige el idioma de las cartas:", ["Original (Mejor calidad)","English","Español"])
+    card_lang = multiple_custom_choice("Elige el idioma de las cartas:", ["Original (Mejor calidad)","English","Español"])
     card_lang = ["orig","en","es"][card_lang]
 
     print("\nObteniendo longitud del mazo...")
@@ -158,25 +167,25 @@ def main():
 
     cards = load_deck(platform, deck_id, prnt_tokens, card_lang)
     print("")
-    
+
     customFolderName = crear_directorio_nuevo(input("¿Quieres ponerle un nombre a la carpeta de descarga? (Enter para no): \033[36m"))
     OUTPUT_DIR = os.path.join("cartas", customFolderName if customFolderName else crear_directorio_nuevo(deckName))
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print("")
-    
+
     # Descargar imágenes en paralelo
     with Progress(
         TextColumn("[bold]Descargando cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
     ) as progress:
         task = progress.add_task("", total=len(cards))
-        
+
         def download_card(card:CardClass):
             global N_ERROR_DOWNLOADS
             try:
                 card.downloadImages(OUTPUT_DIR)
             except Exception as e:
                 N_ERROR_DOWNLOADS += 1
-                print(f"\033[31m[!]\033[0m Error descargando {card.cardMainName}: {e}")
+                print(f"\033[31m[!]\033[0m Error descargando {card.card_main_name}: {e}")
 
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(download_card, c) for c in cards]
@@ -190,7 +199,7 @@ def main():
     # Preguntar si crear PDF de impresión
     try:
         import imprimir_cartas as modulo_imprimir
-        if yesNo_CustomChoice("¿Quieres crear el PDF de las cartas?", "si", "no"):
+        if yesNo_custom_choice("¿Quieres crear el PDF de las cartas?", "si", "no"):
             modulo_imprimir.main(OUTPUT_DIR, "1")
         else:
             subprocess.Popen(rf'explorer /select,"{OUTPUT_DIR}"')
