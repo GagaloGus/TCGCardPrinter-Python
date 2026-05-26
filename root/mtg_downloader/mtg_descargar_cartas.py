@@ -1,23 +1,24 @@
-import sys, os, re, requests, cloudscraper, subprocess
+"""Archivo principal para descargar las cartas de un mazo dado su URL en Archidekt o Moxfield."""
+import sys, os, re, requests, cloudscraper, subprocess, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 
-# Añade el directorio de arriba para usar scripts fuera de la carpeta
-sys.path.insert(1, "/".join(os.path.realpath(__file__).split("/")[0:-2]))
-from basicFunctions import *
-from cardClasses import CardClass, CardType, CardScraper
+from packages.basicFunctions import *
+from mtg_downloader.cardClasses import CardClass, CardType, CardScraper
 
 # ---------------- CONFIG ----------------
 # -- FILES --
 OUTPUT_DIR = ""
-DOWNLOAD_LEN = 0
-N_ERROR_LOAD = 0
+"""Archivo principal para descargar las cartas de un mazo dado su URL en Archidekt o Moxfield."""
+
 N_ERROR_DOWNLOADS = 0
+"""Contador global de errores de descarga para mostrar al finalizar."""
 
 # ------------------------------------------------------------
 # Detecta plataforma e ID del mazo
 # ------------------------------------------------------------
 def get_platform_and_id(url: str):
+    """Detecta la plataforma (Archidekt o Moxfield) y el ID del mazo a partir de su URL. Lanza excepciones si no se reconoce la plataforma o el formato de URL es incorrecto."""
     if "archidekt" in url.lower():
         match = re.search(r"decks/(\d+)", url)
         if not match: raise ValueError("\033[31m[!]\033[0m No pude sacar el ID de Archidekt.")
@@ -30,6 +31,7 @@ def get_platform_and_id(url: str):
 # Obtiene JSON del mazo
 # ------------------------------------------------------------
 def get_json(platform: str, deck_id: str):
+    """Devuelve el JSON con toda la información del mazo según su plataforma e ID. Lanza excepciones si hay errores de conexión o si la plataforma no es soportada."""
     if platform == "archidekt":
         resp = requests.get(f"https://archidekt.com/api/decks/{deck_id}/")
         if resp.status_code != 200: 
@@ -48,6 +50,7 @@ def get_json(platform: str, deck_id: str):
 # Obtiene la longitud del mazo (sin tokens si no se quieren)
 # ------------------------------------------------------------
 def get_download_length(platform: str, deck_id: str, prnt_tokens: bool) -> int:
+    """Devuelve la cantidad total de cartas a descargar para un mazo dado su plataforma e ID. Si prnt_tokens es False, no cuenta los tokens/emblemas."""
     count = 0
     data = get_json(platform, deck_id)
 
@@ -74,7 +77,7 @@ def get_download_length(platform: str, deck_id: str, prnt_tokens: bool) -> int:
 # Carga todas las cartas en paralelo
 # ------------------------------------------------------------
 def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list[CardClass]:
-    global N_ERROR_LOAD
+    """Devuelve una lista de objetos CardClass con toda la info y urls de descarga de cada carta del mazo según la plataforma dada. Carga los datos en paralelo para acelerar el proceso."""
     data = get_json(platform, deck_id)
     deck_data = {}
     
@@ -116,33 +119,31 @@ def load_deck(platform: str, deck_id: str, prnt_tokens: bool, lang: str) -> list
         
         for (url, json, scry_url) in cardScraper.finishedJsons:
             quantity, isCommander = deck_data.get(scry_url, (1, False)) #Default por si acaso
-            card = CardClass(json, quantity, lang, url, isCommander)
+            card = CardClass(json, quantity, lang, scry_url, isCommander)
             cards.append(card)
             
             progress.update(task, advance=1)
-            #time.sleep(0.01)
+            time.sleep(0.01)
 
     return sorted(cards, key=lambda c: c.cardTypes[0].value)
 
 # ------------------------------------------------------------
 # Descargar mazo
 # ------------------------------------------------------------
-def download_deck(cards:list[CardClass], path:str = ""):
+def download_deck(cards:list[CardClass]):
+    """Descarga las imágenes de las cartas en OUTPUT_DIR usando múltiples hilos para acelerar el proceso. 
+    Maneja errores de descarga e imprime un resumen al finalizar."""
     with Progress(
         TextColumn("[bold]Descargando cartas..."), BarColumn(), TextColumn("[bold]{task.completed}/{task.total}"), TimeRemainingColumn()
     ) as progress:
         task = progress.add_task("", total=len(cards))
-        path = path.strip()
         
-        if path == "":
-            path = OUTPUT_DIR
-        
-        print(path)
+        print(OUTPUT_DIR)
         
         def download_card(card:CardClass):
             global N_ERROR_DOWNLOADS
             try:
-                card.downloadImages(path)
+                card.downloadImages(OUTPUT_DIR)
             except Exception as e:
                 N_ERROR_DOWNLOADS += 1
                 print(f"\033[31m[!]\033[0m Error descargando {card.cardMainName}: {e}")     
@@ -156,7 +157,10 @@ def download_deck(cards:list[CardClass], path:str = ""):
 # Script principal
 # ------------------------------------------------------------
 def main():
-    global OUTPUT_DIR, N_ERROR_DOWNLOADS, DOWNLOAD_LEN
+    """Este es el script principal para descargar las cartas de un mazo dado su URL en Archidekt o Moxfield.
+    Pide al usuario la URL del mazo, si quiere incluir tokens, el idioma de las cartas, y luego descarga todas las imágenes en una carpeta dentro de 'cartas/'.
+    Al finalizar, ofrece crear un PDF de impresión o abrir la carpeta con las imágenes."""
+    global OUTPUT_DIR, N_ERROR_DOWNLOADS
     # ---------- SETUP
     
     print("\033[33m======= DESCARGAR CARTAS MAGIC THE GATHERING =======\033[0m")
@@ -182,10 +186,6 @@ def main():
     card_lang = multiple_CustomChoice("Elige el idioma de las cartas:", ["Original (Mejor calidad)","English","Español"])
     card_lang = ["orig","en","es"][card_lang]
 
-    print("\nObteniendo longitud del mazo...")
-    DOWNLOAD_LEN = get_download_length(platform, deck_id, prnt_tokens)
-    borrar_ultimas_lineas(0)
-
     cards = load_deck(platform, deck_id, prnt_tokens, card_lang)
     print("")
     
@@ -198,12 +198,12 @@ def main():
     download_deck(cards)
 
     print(f"\n\033[32mListo mi rey, todas las cartas estan en '{OUTPUT_DIR}'\033[0m")
-    if N_ERROR_DOWNLOADS + N_ERROR_LOAD > 0:
-        print(f"\033[33m[!] No se pudieron procesar {N_ERROR_DOWNLOADS + N_ERROR_LOAD} cartas\033[0m")
+    if N_ERROR_DOWNLOADS > 0:
+        print(f"\033[33m[!] No se pudieron procesar {N_ERROR_DOWNLOADS} cartas\033[0m")
 
     # Preguntar si crear PDF de impresión
     try:
-        import imprimir_cartas as modulo_imprimir
+        import card_printers.imprimir_cartas as modulo_imprimir
         if yesNo_CustomChoice("¿Quieres crear el PDF de las cartas?", "si", "no"):
             modulo_imprimir.main(OUTPUT_DIR, "1")
         else:

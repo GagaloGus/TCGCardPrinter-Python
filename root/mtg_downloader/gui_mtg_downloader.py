@@ -3,8 +3,8 @@ from tkinter import filedialog
 import os, threading
 from urllib.request import urlopen
 from PIL import Image
-import mtg_descargar_cartas
-from cardClasses import CardClass
+import mtg_downloader.mtg_descargar_cartas as mtg_descargar_cartas
+from mtg_downloader.cardClasses import CardClass
 
 BASE_MAGIC_DIMS = (63, 88)
 IMG_SIZE_MULT = 4
@@ -15,12 +15,20 @@ LANGUAGES = {
     "es":"Español"
 }
 
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+CARD_BACK_PATH = os.path.join(DIR_PATH, "img", "card_back.png")
+
 def get_mtg_dims(mult:float = IMG_SIZE_MULT) -> tuple:
     return (mult*BASE_MAGIC_DIMS[0], mult*BASE_MAGIC_DIMS[1])
 
 def get_img_by_url(url:str):
     # guarda imagenes en memoria, no en el disco duro
-    return Image.open(urlopen(url))
+    return Image.open(urlopen(url)).convert("RGBA")
+
+def get_img_by_path(path:str):
+    # guarda imagenes en memoria, no en el disco duro
+    return Image.open(path).convert("RGBA")
+
 class FolderPicker(gui.CTkFrame):
     def __init__(self, master, placeholder:str):
         super().__init__(master)
@@ -94,16 +102,22 @@ class CardViewerFrame(gui.CTkFrame):
     def __init__(self, master):
         super().__init__(master)
 
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        self.interiorDiv = gui.CTkFrame(self, fg_color="blue")
+        self.interiorDiv.grid(row=0, column=0, sticky="nswe", padx=20, pady=20)
+        self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         self.card = None
 
-        self.img_label = gui.CTkLabel(self, text="")
-        self.img_label.grid(row=1, column=0, sticky="n")
+        self.img = gui.CTkImage(get_img_by_path(CARD_BACK_PATH), size=get_mtg_dims(4))
+        self.img_label = gui.CTkLabel(self.interiorDiv, text="", image=self.img)
+        self.tree = CardTreeFrame(self.interiorDiv, self.show_card)
         
-        self.tree = CardTreeFrame(self, self.show_card)
-        self.tree.grid(row=1, column=1, sticky="nswe")
+        self.img_label.grid(row=0, column=0, sticky="nws", padx=(0, 60))
+        self.tree.grid(row=0, column=1, sticky="nes")
 
     def show_card(self, card: CardClass):
         self.card = card
@@ -194,23 +208,29 @@ class ExportFrame(gui.CTkFrame):
 class App(gui.CTk):
     def __init__(self):
         super().__init__()
-        self.grid_columnconfigure(tuple(range(7)),weight=1)
         self.geometry("1200x700")
         self.deck = []
 
-        
-
+        # Deck Input
         self.input = DeckInputFrame(self, self.on_deck_loaded)
-        self.input.grid(row=1, column=0, padx=5, pady=5, sticky="nswe", columnspan=2)
+        self.input.configure(width=300, height=250)
+        self.input.place(relx=10, rely=10)
 
+        # Card Viewer
         self.viewer = CardViewerFrame(self)
-        self.viewer.grid(row=1, column=2, padx=5, pady=5, sticky="nswe", columnspan=4)
+        self.viewer.configure(width=650, height=600)
+        self.viewer.place(relx=320, rely=10)
 
+        # Other Prints
         self.otherPrints = OtherPrintsFrame(self)
-        self.otherPrints.grid(row=1, column=6, padx=5, pady=5, sticky="nswe", columnspan=1)
+        self.otherPrints.configure(width=200, height=600)
+        self.otherPrints.place(x=980, y=10)
 
+        # Export Frame
         self.export = ExportFrame(self, lambda: self.deck)
-        self.export.grid(row=2, column=4, padx=5, pady=5, columnspan=3, sticky="we")
+        self.export.configure(width=650, height=70)
+        self.export.place(x=320, y=620)
+
 
     def on_deck_loaded(self, deck):
         self.deck = deck

@@ -1,3 +1,4 @@
+"""Archivo principal para generar PDFs imprimibles de cartas a partir de imágenes en una carpeta."""
 import os
 import sys
 import re
@@ -9,7 +10,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from PIL import Image
-import basicFunctions
+import packages.basicFunctions as basicFunctions
 
 EXTENSIONS_ALLOWED = [".png", ".jpg", ".jpeg", ".jfif", ".tiff", ".webp"]
 INPUT_DIR = "cartas_imprimir"
@@ -31,6 +32,7 @@ def debug():
     print("Modulo imprimir_cartas funciona!")
 
 def comprimir_imagen(path, max_width_px=744, quality=85):
+    """Comprime la imagen en 'path' redimensionándola a un ancho máximo de 'max_width_px' manteniendo la relación de aspecto. Devuelve un objeto PIL Image listo para ser insertado en el PDF."""
     img = Image.open(path).convert("RGB")
 
     # Redimensiona solo si es más grande
@@ -42,6 +44,7 @@ def comprimir_imagen(path, max_width_px=744, quality=85):
     return img
 
 def dibujar_guias_pagina(c: canvas.Canvas,dash: bool = True, lines_between_cards:bool = True):
+    """Dibuja guías de corte en la página actual del canvas 'c'. Si 'dash' es True, las líneas serán guionadas. Si 'lines_between_cards' es True, también dibuja líneas entre las cartas para facilitar el recorte."""
     global cols, rows, card_w, card_h, card_margin, x_start, y_start
     line_margin = 0.3
     # Estilo
@@ -69,6 +72,7 @@ def dibujar_guias_pagina(c: canvas.Canvas,dash: bool = True, lines_between_cards
     c.setDash()  # Reset dash a solido
 
 def comprimir_pdf(input_pdf: str, output_pdf: str):
+    """Comprime el PDF en 'input_pdf' usando pikepdf y lo guarda como 'output_pdf'. Elimina el archivo temporal 'input_pdf' después de guardar. Maneja errores de compresión e imprime mensajes informativos."""
     if not os.path.exists(input_pdf):
         print(f"\033[33m[Error: No se encontró {input_pdf}]\033[0m")
         return
@@ -85,6 +89,7 @@ def comprimir_pdf(input_pdf: str, output_pdf: str):
 
 
 def main(customInputDir = "", customTipoCarta = "-1"):
+    """Función principal para generar PDFs imprimibles de cartas a partir de imágenes en una carpeta. Permite configurar el tipo de carta, el margen entre cartas y el nombre de la carpeta de salida. Maneja errores comunes como no encontrar imágenes o problemas al generar los PDFs, e imprime mensajes informativos durante el proceso."""
     global cols, rows, card_w, card_h, card_margin, x_start, y_start, INPUT_DIR
     
     print(f"\033[33m==================== CREAR IMPRIMIBLE DE CARTAS ====================")

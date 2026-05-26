@@ -1,13 +1,12 @@
+"""Archivo principal para definir la clase CardClass, que representa una carta de Magic con sus datos y métodos para descargar imágenes. También incluye la clase CardScraper para obtener los datos de las cartas desde URLs, con manejo de cache para optimizar el proceso."""
 import asyncio
 from enum import Enum
 import sys, os, requests, json, time, ctypes
 from PIL import Image
 from urllib.request import urlopen
 
-#Añade el directorio de arriba en el path para usar scripts fuera de la carpeta
-sys.path.insert(1, "/".join(os.path.realpath(__file__).split("/")[0:-2]))
-from basicFunctions import *
-from scraper import scrape_json as url_scraper
+from mtg_downloader.scraper import scrape_json as url_scraper
+from packages.basicFunctions import *
 
 # ---------------- CACHE GLOBAL ----------------
 SCRYFALL_URL_CACHE = {}          # cache por URL / Guarda el JSON entero de Scryfall para cada url
@@ -22,6 +21,7 @@ DOUBLE_LAYOUTS = ["transform", "modal_dfc"]
 
 
 class CardType(Enum):
+    """Enumeración de tipos de cartas de Magic: The Gathering. Incluye tipos comunes como Criatura, Instantáneo, Encantamiento, así como categorías especiales como Commander y Token. El método __str__ permite obtener una representación legible del tipo en diferentes idiomas, con un fallback al inglés si el idioma no es reconocido."""
     ARTIFACT = 0
     BATTLE = 1
     CONSPIRACY = 2
@@ -80,15 +80,7 @@ class CardType(Enum):
         return self.name.capitalize()  
 
 class CardScraper:
-    """
-        1. Obtiene todas las urls
-        2. las pasa por el scraper para obtener todos los jsons
-        3. si el idioma es "orig" se devuelven los jsons de scryfall, si no, se obtiene su url con su oracle_id y se scrapean una vez mas
-        4. Devuelve una lista de una tupla que contiene: 
-            la url de donde se obtuvo el JSON
-            el JSON
-            la url original de scryfall
-    """
+    """Clase principal para obtener los datos de las cartas desde URLs. Toma una lista de URLs y un idioma, y maneja el proceso de scrappeo con cache para optimizar la obtención de datos. El método run inicia el proceso, que incluye scrappear las URLs, parsear los datos y guardar los resultados en la propiedad finishedJsons. Maneja errores y limita la cantidad de solicitudes por segundo para evitar bloqueos."""
    
     def __init__(self, urls: list, lang: str):
         self.urls = urls
@@ -208,6 +200,7 @@ class CardScraper:
         print(f"\033[33mFin // Se obtuvieron {len(self.finishedJsons)} resultados\033[0m")     
     
     def _save_json_cache(self):
+        """Guarda las caches globales SCRYFALL_URL_CACHE y ORACLE_URL_CACHE en archivos JSON dentro de la carpeta de cache. Crea la carpeta si no existe y la oculta. Antes de guardar, elimina los archivos de cache que sean más antiguos que CACHE_LIFETIME_SEC para evitar acumular datos obsoletos. Maneja errores al guardar e imprime mensajes informativos sobre el proceso."""
         global SCRYFALL_URL_CACHE, ORACLE_URL_CACHE
         with open(self.cacheFileNames[0], "w", encoding="utf-8") as f:
             json.dump(SCRYFALL_URL_CACHE, f, ensure_ascii=False, indent=2)  
@@ -215,6 +208,7 @@ class CardScraper:
             json.dump(ORACLE_URL_CACHE, f, ensure_ascii=False, indent=2)  
         
     def _load_json_cache(self):
+        """Carga las caches globales SCRYFALL_URL_CACHE y ORACLE_URL_CACHE desde archivos JSON dentro de la carpeta de cache. Crea la carpeta si no existe y la oculta. Antes de cargar, elimina los archivos de cache que sean más antiguos que CACHE_LIFETIME_SEC para evitar usar datos obsoletos. Maneja errores al cargar e imprime mensajes informativos sobre el proceso."""
         global SCRYFALL_URL_CACHE, ORACLE_URL_CACHE
         os.makedirs(self.cacheFolderName, exist_ok=True)
         ctypes.windll.kernel32.SetFileAttributesW(self.cacheFolderName, 0x02) #Pone la carpeta de cache oculta
@@ -229,19 +223,20 @@ class CardScraper:
         #Cache SCRYFALL
         try:
             with open(self.cacheFileNames[0], "r", encoding="utf-8") as f:
-                SCRYFALL_URL_CACHE = json.load(f)
+                SCRYFALL_URL_CACHE.update(json.load(f))
                 print("cache de url obtenida")
         except Exception as e:
             print(f"no se pudo obtener la cache de url // {e}")
         #Cache ORACLE
         try:
             with open(self.cacheFileNames[1], "r", encoding="utf-8") as f:
-                ORACLE_URL_CACHE = json.load(f)
+                ORACLE_URL_CACHE.update(json.load(f))
                 print("cache de oracle obtenida")
         except Exception as e:
             print(f"no se pudo obtener la cache de oracle // {e}")
 
 class CardClass:
+    """Clase que representa una carta de Magic: The Gathering con sus datos y métodos para descargar imágenes. Toma un JSON de Scryfall, la cantidad de copias, el idioma, la URL original de Scryfall y si es commander. Parsea los datos relevantes como el nombre, tipo, layout y URLs de imagen. El método downloadImages permite descargar las imágenes de la carta a una carpeta especificada, generando nombres únicos para evitar sobrescribir archivos. El método showImage devuelve las imágenes como objetos PIL para visualización."""
     def __init__(self, jsonData, quantity:int, lang:str, scryfall_url:str, isCommander:bool):       
         self.jsonData = jsonData
         self.quantity = quantity
@@ -285,49 +280,60 @@ class CardClass:
                     end=" // " if i < len(self.cardNames) - 1 else "\n")
             
     def _parse_card_data(self):
+        """Parsea los datos relevantes del JSON de Scryfall para obtener el nombre, tipo, layout y URLs de imagen de la carta. Maneja diferentes layouts como single, reversible y double, y extrae la información correspondiente según el formato del JSON. Si no se encuentra la información esperada, lanza errores con mensajes informativos."""
         self.altLang = "printed_name" in self.jsonData
 
         if self.layout == "single":
-            self.cardMainName = self.jsonData["printed_name" if self.altLang else "name"]
+            self.cardMainName = self.jsonData["printed_name" if self.altLang else "name"].strip()
             self.cardNames = [self.cardMainName]
             self.cardTypeText.append(self.jsonData["type_line"])
         elif self.layout == "reversible":
-            self.cardMainName = self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"]
-            self.cardNames = [self.cardMainName]
-            self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
+            if "card_faces" in self.jsonData and len(self.jsonData["card_faces"]) > 0:
+                self.cardMainName = self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"].strip()
+                self.cardNames = [self.cardMainName]
+                self.cardTypeText.append(self.jsonData["card_faces"][0]["type_line"])
+            else:
+                raise ValueError(f"Tarjeta reversible sin card_faces válidas: {self.scryfall_url}")
         else:
-            name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"])
-            name2 = str(self.jsonData["card_faces"][1]["printed_name" if self.altLang else "name"])
-            self.cardMainName = f"{name1} // {name2}"
-            self.cardNames = [name1, name2]
-            self.cardTypeText += self.jsonData["type_line"].split("//") 
+            if "card_faces" in self.jsonData and len(self.jsonData["card_faces"]) >= 2:
+                name1 = str(self.jsonData["card_faces"][0]["printed_name" if self.altLang else "name"].strip())
+                name2 = str(self.jsonData["card_faces"][1]["printed_name" if self.altLang else "name"].strip())
+                self.cardMainName = f"{name1} // {name2}"
+                self.cardNames = [name1, name2]
+                self.cardTypeText += self.jsonData["type_line"].split("//")
+            else:
+                raise ValueError(f"Tarjeta doble cara sin card_faces válidas: {self.scryfall_url}") 
   
     def showImage(self) -> list:
+        """Devuelve las imágenes de la carta como objetos PIL para visualización. Descarga las imágenes desde las URLs obtenidas y las abre con PIL. Si no se encuentra una imagen o hay un error al descargar, lanza errores con mensajes informativos."""
         imgs = []
         for i in range(len(self.cardNames)):
             url = self.img_urls[i]
             imgs.append(Image.open(urlopen(url)))
         return imgs
             
-    def downloadImages(self, folder_path:str):        
+    def downloadImages(self, folder_path:str):       
+        """Descarga las imágenes de la carta a una carpeta especificada, generando nombres únicos para evitar sobrescribir archivos. Para cada imagen, genera un nombre basado en el tipo de carta y el nombre, y si ya existe un archivo con ese nombre, agrega un índice para hacerlo único. Descarga la imagen desde la URL y la guarda en la carpeta. Imprime mensajes informativos sobre el proceso de descarga.""" 
         for i in range(len(self.cardNames)):
             url = self.img_urls[i]
             img = requests.get(url).content
             
             for q in range(self.quantity):
-                filepath = ""
+                # Generar nombre único de archivo
+                base_name = f"{self.cardTypeText[i].lower()}_{self.cardNames[i].lower()}".strip()
                 index = q
                 while True:
-                    filepath = os.path.join(folder_path, crear_directorio_nuevo(f"{self.cardTypeText[i].lower()}_{self.cardNames[i].lower()}_{index}.jpg"))
-                    if os.path.exists(filepath):
-                        index+=1
-                    else:
+                    filename = f"{base_name}_{index}.jpg"
+                    filepath = os.path.join(folder_path, filename)
+                    if not os.path.exists(filepath):
                         break
+                    index += 1
 
                 open(filepath, "wb").write(img)
                 print(f"\033[32m[Y]\033[0m Imagen descargada: {filepath}")  
                 
     def _get_cardType(self) -> list[CardType]:
+        """Determina el tipo de carta basado en el texto del tipo obtenido del JSON. Si la carta es un commander, asigna el tipo Commander. Para otras cartas, compara el texto del tipo con una lista de tipos preferidos (Token, Criatura, Planeswalker) y luego con el resto de tipos definidos en la enumeración CardType. Si no se encuentra un tipo coincidente, asigna el tipo Other. Devuelve una lista de tipos encontrados para la carta."""
         allTypes = []
         if self.isCommander:
             for t in self.cardTypeText:
@@ -357,6 +363,7 @@ class CardClass:
         return f"{self.cardMainName} (Idioma original: {self.altLang}) ({self.quantity}) -> {self.scryfall_url}"
     
 def _get_card_layout(jsonData) -> str: 
+    """Determina el layout de la carta basado en el campo "layout" del JSON de Scryfall. Si el layout es uno de los definidos en DOUBLE_LAYOUTS, devuelve "double". Si el layout es "reversible_card", devuelve "reversible". Para cualquier otro layout, devuelve "single". Este método ayuda a clasificar las cartas según su formato para un manejo adecuado en otras partes del código."""
     if jsonData["layout"] in DOUBLE_LAYOUTS:
         return "double"
     elif jsonData["layout"] == "reversible_card":
@@ -364,12 +371,12 @@ def _get_card_layout(jsonData) -> str:
     else:
         return "single"    
         
-def _get_card_oracle_id(jsonData) -> str:   
+def _get_card_oracle_id(jsonData) -> str|None:   
+    """Obtiene el oracle_id de la carta desde el JSON de Scryfall. Intenta obtenerlo directamente del campo "oracle_id". Si no está presente, intenta obtenerlo del primer card_face en caso de que sea una carta doble. Si no se encuentra un oracle_id válido, devuelve None. Este método es útil para identificar cartas de manera única y para obtener datos en diferentes idiomas usando el oracle_id."""
     try:
-        oracle_id = jsonData["oracle_id"]   
-    except:
-        oracle_id = jsonData["card_faces"][0]["oracle_id"]
-    
-    return oracle_id
-if __name__ == "__main__":
-    pass
+        return jsonData["oracle_id"]
+    except (KeyError, TypeError):
+        try:
+            return jsonData["card_faces"][0]["oracle_id"]
+        except (KeyError, IndexError, TypeError):
+            return None

@@ -3,7 +3,7 @@ from tkinter import filedialog
 import os, threading
 from urllib.request import urlopen
 from PIL import Image
-import mtg_descargar_cartas
+import root.mtg_downloader.mtg_descargar_cartas as mtg_descargar_cartas
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 IMG_PIPA_PATH = os.path.join(DIR_PATH, "img", "jeje.png")
@@ -208,7 +208,7 @@ class DeckLoaderFrame(gui.CTkFrame):
             self.btn_search.configure(True, state="disabled")
             platform, id, lang, deckName = self.get_deck_data()
 
-            self.debugText.configure(text=f"====== DATOS DEL MAZO ======\n\n[ {deckName} ]\nPlataforma: {platform}\nID: {id}\nIdioma: {LANGUAGES.get(lang, "no se")}")
+            self.debugText.configure(text=f"====== DATOS DEL MAZO ======\n\n[ {deckName} ]\nPlataforma: {platform}\nID: {id}\nIdioma: {LANGUAGES.get(lang, "no se")}") # type: ignore
             self.btn_search.configure(True, state="normal")
         except Exception as e:
             self.btn_search.configure(True, state="normal")
