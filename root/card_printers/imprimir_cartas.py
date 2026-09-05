@@ -157,6 +157,7 @@ def main(customInputDir = "", customTipoCarta = "-1"):
     has_margin = basicFunctions.yesNo_CustomChoice("¿Quieres que haya margen entre las cartas?", "si", "no")
     basicFunctions.borrar_ultimas_lineas(0)
     print(f"\033[33m-- {'Con' if has_margin else 'Sin'} Margen --\033[0m")
+    print("\nGenerando PDF...")
     
     card_margin = 5*mm if has_margin else 0.3*mm       
     
